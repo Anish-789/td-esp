@@ -1,0 +1,734 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Admin</title>
+<style>
+  *{box-sizing:border-box;font-family:Arial,sans-serif}
+  body{margin:0;background:#fff;color:#222;padding-bottom:30px}
+  .top{padding:14px 16px;border-bottom:1px solid #eee;font-weight:bold;font-size:20px;color:#ff6a00}
+  .stats{display:flex;gap:8px;padding:12px 16px}
+  .s{flex:1;background:#fff3ea;border-radius:12px;padding:10px;text-align:center;font-size:12px}
+  .s b{display:block;font-size:20px;color:#ff6a00}
+  .tabs{display:flex;gap:6px;padding:0 16px;overflow-x:auto}
+  .tab{flex:none;padding:10px 14px;border-radius:10px;background:#f4f4f4;font-weight:bold;font-size:13px}
+  .tab.on{background:#ff6a00;color:#fff}
+  .pane{display:none;padding:14px 16px}
+  .pane.on{display:block}
+  .card{border:1px solid #eee;border-radius:14px;padding:12px;margin-bottom:12px;font-size:14px;line-height:1.6}
+  .card small{color:#888}
+  .r2{display:flex;gap:12px;align-items:center}
+  .th{width:52px;height:52px;border-radius:12px;background:#fff3ea;color:#ff6a00;font-weight:bold;
+      display:flex;align-items:center;justify-content:center;overflow:hidden;flex:none;font-size:20px}
+  .th img{width:100%;height:100%;object-fit:cover}
+  .btns{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+  .btns button{flex:1;padding:9px;border:1px solid #ff6a00;background:#fff;color:#ff6a00;border-radius:10px;font-size:13px}
+  .btns button.red{border-color:#d00;color:#d00}
+  .btns button.ok{background:#ff6a00;color:#fff}
+  input,select{width:100%;padding:12px;margin:5px 0;border:1px solid #ddd;border-radius:12px;font-size:15px}
+  input[type=checkbox]{width:auto;margin-right:6px}
+  button.go{width:100%;padding:14px;border:none;border-radius:12px;background:#ff6a00;color:#fff;font-size:16px;margin-top:8px}
+  button.grey{background:#999}
+  button.sm{padding:10px 14px;border:1px solid #ff6a00;background:#fff;color:#ff6a00;border-radius:10px}
+  .prev{width:64px;height:64px;border-radius:14px;object-fit:cover;background:#f4f4f4;display:none}
+  .lrow{display:flex;gap:12px;align-items:center;margin:8px 0}
+  .msg{padding:40px 16px;text-align:center;color:#d00}
+  h4{margin:14px 0 4px}
+</style>
+</head>
+<body>
+<div class="top" style="display:flex;justify-content:space-between;align-items:center">Admin Panel
+  <a href="admin-support.html" style="font-size:14px;color:#ff6a00;text-decoration:none;border:1px solid #ff6a00;border-radius:10px;padding:6px 12px">Support</a>
+</div>
+<div id="app" style="display:none">
+  <div class="stats" id="stats"></div>
+  <div class="tabs">
+    <div class="tab on" data-p="pM">Matches</div>
+    <div class="tab" data-p="pC">Create</div>
+    <div class="tab" data-p="pG">Category</div>
+    <div class="tab" data-p="pS">Settings</div>
+    <div class="tab" data-p="pD">Deposits</div>
+    <div class="tab" data-p="pW">Withdraw</div>
+  </div>
+
+  <div class="pane on" id="pM"><div id="mList"></div></div>
+
+  <div class="pane" id="pC">
+    <input id="title" placeholder="Match title (jaise Solo Rush #2)">
+    <select id="cat"></select>
+    <select id="map"><option>Bermuda</option><option>Purgatory</option><option>Kalahari</option><option>Alpine</option><option>NeXTerra</option></select>
+    <input id="start" type="datetime-local">
+    <input id="fee" type="number" placeholder="Entry fee (₹)">
+    <input id="kill" type="number" placeholder="Per kill prize (₹)">
+    <input id="boo" type="number" placeholder="Booyah prize (₹)">
+    <input id="pool" type="number" placeholder="Total prize pool (₹)">
+    <input id="slots" type="number" placeholder="Max slots (players/teams)">
+    <div class="lrow"><img id="mPrev" class="prev"><button class="sm" id="mPick">Match logo chuno</button></div>
+    <button class="go" id="create">Match Banao</button>
+  </div>
+
+  <div class="pane" id="pG">
+    <div id="gList"></div>
+    <h4 id="gTitle">Nayi Category</h4>
+    <input id="gName" placeholder="Category ka naam (jaise Solo, Clash Squad)">
+    <input id="gTeam" type="number" placeholder="Team size (Solo=1, Duo=2, Squad=4)">
+    <input id="gOrder" type="number" placeholder="Order (1, 2, 3...)">
+    <div class="lrow"><img id="gPrev" class="prev"><button class="sm" id="gPick">Category logo chuno</button></div>
+    <button class="go" id="gSave">Save</button>
+    <button class="go grey" id="gNew">Form saaf karo</button>
+    <button class="go grey" id="gSeed">Default Solo / Duo / Squad banao</button>
+  </div>
+
+  <div class="pane" id="pS">
+    <h4>App ka naam</h4>
+    <input id="aName" placeholder="App name">
+    <h4>App ka logo</h4>
+    <div class="lrow"><img id="aPrev" class="prev"><button class="sm" id="aPick">Logo chuno</button></div>
+        <h4>Payment UPI ID</h4>
+    <input id="aUpi" placeholder="yourname@bank">
+    <h4>Payment QR code</h4>
+    <div class="lrow"><img id="qPrev" class="prev" style="width:120px;height:120px"><button class="sm" id="qPick">Choose QR image</button></div>
+    <h4>Referral bonus (₹)</h4>
+    <input id="aRef" type="number" placeholder="Bonus for the referrer (e.g. 10)">
+    <input id="aRef2" type="number" placeholder="Bonus for the new user (e.g. 10)">
+    <button class="go" id="aSave">Save</button>
+  </div>
+
+  <div class="pane" id="pD"><div id="dList"></div></div>
+  <div class="pane" id="pW"><div id="wList"></div></div>
+  <div class="pane" id="pR"><div id="rBox"></div></div>
+</div>
+<div class="msg" id="msg">Loading...</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getFirestore, doc, getDoc, setDoc, collection, getDocs, addDoc, deleteDoc,
+         updateDoc, query, where, runTransaction, serverTimestamp, Timestamp }
+  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyDkwQvjVjrEQqpEIIgWKshbz538lGm7DL8",
+  authDomain: "td-esp.firebaseapp.com",
+  projectId: "td-esp",
+  storageBucket: "td-esp.firebasestorage.app",
+  messagingSenderId: "1074367636296",
+  appId: "1:1074367636296:web:65189df5578a98cbaa097d"
+};
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+const g = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c =>
+  ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
+const thumb = (src, name) => `<div class="th">${src ? `<img src="${esc(src)}">` : esc((name || "?")[0].toUpperCase())}</div>`;
+
+let matches = [], players = [], curMatch = null, cats = [];
+let mLogo = "", gLogo = "", aLogo = "", editCat = null, qrImg = "";
+
+// ---------- Gallery se photo chuno + chhota karo ----------
+function pickImage(max = 256, type = "image/webp") {
+  return new Promise((resolve, reject) => {
+    const inp = document.createElement("input");
+    inp.type = "file"; inp.accept = "image/*"; inp.style.display = "none";
+    document.body.appendChild(inp);
+    inp.onchange = () => {
+      const f = inp.files[0];
+      if (!f) { inp.remove(); return reject(new Error("no file")); }
+      const url = URL.createObjectURL(f);
+      const img = new Image();
+      img.onload = () => {
+        const sc = Math.min(1, max / Math.max(img.width, img.height));
+        const c = document.createElement("canvas");
+        c.width = Math.round(img.width * sc);
+        c.height = Math.round(img.height * sc);
+        c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+        URL.revokeObjectURL(url); inp.remove();
+                resolve(c.toDataURL(type, 0.9));
+      };
+      img.onerror = () => { inp.remove(); reject(new Error("Image nahi khuli")); };
+      img.src = url;
+    };
+    inp.click();
+  });
+}
+function showPrev(id, src) { const e = g(id); e.src = src; e.style.display = src ? "block" : "none"; }
+
+onAuthStateChanged(auth, async (user) => {
+  if (!user) { location.href = "index.html"; return; }
+  const u = (await getDoc(doc(db, "users", user.uid))).data();
+  if (!u || u.role !== "admin") { g("msg").textContent = "Access nahi hai (sirf admin)"; return; }
+  g("msg").style.display = "none";
+  g("app").style.display = "block";
+  refreshAll();
+});
+
+async function refreshAll() {
+  loadStats(); await loadCats(); loadMatches(); loadSettings(); loadDeposits(); loadWithdrawals();
+}
+
+function show(id) {
+  document.querySelectorAll(".pane").forEach(p => p.classList.remove("on"));
+  g(id).classList.add("on");
+}
+window.show = show;
+document.querySelectorAll(".tab").forEach(t => t.addEventListener("click", () => {
+  document.querySelectorAll(".tab").forEach(x => x.classList.remove("on"));
+  t.classList.add("on");
+  show(t.dataset.p);
+}));
+
+// ---------- Dashboard ----------
+async function loadStats() {
+  const us = await getDocs(collection(db, "users"));
+  const ds = await getDocs(query(collection(db, "deposits"), where("status", "==", "pending")));
+  const ws = await getDocs(query(collection(db, "withdrawals"), where("status", "==", "pending")));
+  g("stats").innerHTML =
+    `<div class="s"><b>${us.size}</b>Users</div>` +
+    `<div class="s"><b>${ds.size}</b>Pending Deposit</div>` +
+    `<div class="s"><b>${ws.size}</b>Pending Withdraw</div>`;
+}
+
+// ---------- Settings (app naam + logo) ----------
+async function loadSettings() {
+  const s = await getDoc(doc(db, "settings", "app"));
+  if (s.exists()) {
+    g("aName").value = s.data().name || "";
+    showPrev("aPrev", s.data().logo || "");
+        g("aUpi").value = s.data().upiId || "";
+    showPrev("qPrev", s.data().payQr || "");
+    g("aRef").value = s.data().refBonus ?? "";
+    g("aRef2").value = s.data().refBonusNew ?? "";
+  }
+}
+g("aPick").addEventListener("click", async () => {
+  try { aLogo = await pickImage(256); showPrev("aPrev", aLogo); } catch (e) {}
+});
+g("qPick").addEventListener("click", async () => {
+  try { qrImg = await pickImage(500, "image/png"); showPrev("qPrev", qrImg); } catch (e) {}
+});
+g("aSave").addEventListener("click", async () => {
+    const d = { name: g("aName").value.trim(), upiId: g("aUpi").value.trim(),
+              refBonus: Number(g("aRef").value) || 0,
+              refBonusNew: Number(g("aRef2").value) || 0 };
+  if (aLogo) d.logo = aLogo;
+  if (qrImg) d.payQr = qrImg;
+  try { await setDoc(doc(db, "settings", "app"), d, { merge: true }); alert("Save ho gaya ✅"); }
+  catch (e) { alert(e.message); }
+});
+
+// ---------- Categories ----------
+async function loadCats() {
+  const s = await getDocs(collection(db, "categories"));
+  cats = s.docs.map(d => ({ id: d.id, ...d.data() }))
+    .sort((a, b) => (a.order || 0) - (b.order || 0));
+  g("gList").innerHTML = cats.length ? cats.map(c => `
+    <div class="card"><div class="r2">${thumb(c.logo, c.name)}
+      <div style="flex:1"><b>${esc(c.name)}</b><br><small>Team size ${c.teamSize || 1} • order ${c.order || 0}</small></div></div>
+      <div class="btns">
+        <button onclick="editCategory('${c.id}')">Edit</button>
+        <button class="red" onclick="delCategory('${c.id}')">Delete</button>
+      </div></div>`).join("")
+    : "Abhi koi category nahi. Neeche se banao, ya Default wala button dabao.";
+  g("cat").innerHTML = cats.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join("");
+}
+
+function resetCatForm() {
+  editCat = null; gLogo = "";
+  g("gTitle").textContent = "Nayi Category";
+  g("gName").value = ""; g("gTeam").value = ""; g("gOrder").value = "";
+  showPrev("gPrev", "");
+}
+g("gNew").addEventListener("click", resetCatForm);
+
+g("gPick").addEventListener("click", async () => {
+  try { gLogo = await pickImage(256); showPrev("gPrev", gLogo); } catch (e) {}
+});
+
+g("gSave").addEventListener("click", async () => {
+  const name = g("gName").value.trim();
+  if (!name) { alert("Category ka naam likho"); return; }
+  const data = { name, teamSize: Number(g("gTeam").value) || 1, order: Number(g("gOrder").value) || 0 };
+  try {
+    if (editCat) {
+      if (gLogo) data.logo = gLogo;
+      await updateDoc(doc(db, "categories", editCat), data);
+    } else {
+      await addDoc(collection(db, "categories"), { ...data, logo: gLogo || "" });
+    }
+    alert("Save ho gaya ✅");
+    resetCatForm(); loadCats();
+  } catch (e) { alert(e.message); }
+});
+
+window.editCategory = (id) => {
+  const c = cats.find(x => x.id === id);
+  editCat = id; gLogo = "";
+  g("gTitle").textContent = "Edit: " + c.name;
+  g("gName").value = c.name; g("gTeam").value = c.teamSize || 1; g("gOrder").value = c.order || 0;
+  showPrev("gPrev", c.logo || "");
+  window.scrollTo(0, document.body.scrollHeight);
+};
+window.delCategory = async (id) => {
+  if (!confirm("Category delete karni hai? (Iske matches home me nahi dikhenge)")) return;
+  await deleteDoc(doc(db, "categories", id));
+  loadCats();
+};
+g("gSeed").addEventListener("click", async () => {
+  const d = [["solo", "Solo", 1, 1], ["duo", "Duo", 2, 2], ["squad", "Squad", 4, 3]];
+  try {
+    for (const [id, name, teamSize, order] of d)
+      await setDoc(doc(db, "categories", id), { name, teamSize, order }, { merge: true });
+    alert("Ban gayi ✅"); loadCats();
+  } catch (e) { alert(e.message); }
+});
+
+// ---------- Create match ----------
+g("mPick").addEventListener("click", async () => {
+  try { mLogo = await pickImage(256); showPrev("mPrev", mLogo); } catch (e) {}
+});
+
+g("create").addEventListener("click", async () => {
+  const cid = g("cat").value;
+  const c = cats.find(x => x.id === cid);
+  if (!c) { alert("Pehle Category tab me category banao"); return; }
+  const m = {
+    title: g("title").value.trim(), map: g("map").value,
+    entryFee: Number(g("fee").value), perKill: Number(g("kill").value),
+    booyahPrize: Number(g("boo").value), prizePool: Number(g("pool").value),
+    maxSlots: Number(g("slots").value)
+  };
+  if (!m.title || !g("start").value || !m.maxSlots) { alert("Title, time aur slots zaroori hain"); return; }
+  try {
+    await addDoc(collection(db, "matches"), {
+      ...m, catId: cid, catName: c.name, mode: cid, teamSize: c.teamSize || 1,
+      logo: mLogo, joined: 0, status: "upcoming",
+      startTime: Timestamp.fromDate(new Date(g("start").value))
+    });
+    alert("Match ban gaya ✅");
+    ["title", "fee", "kill", "boo", "pool", "slots"].forEach(i => g(i).value = "");
+    mLogo = ""; showPrev("mPrev", "");
+    loadMatches();
+  } catch (e) { alert(e.message); }
+});
+
+// ---------- Matches ----------
+async function loadMatches() {
+  const s = await getDocs(collection(db, "matches"));
+  matches = s.docs.map(d => ({ id: d.id, ...d.data() }))
+    .sort((a, b) => (b.startTime?.seconds || 0) - (a.startTime?.seconds || 0));
+  g("mList").innerHTML = matches.length ? matches.map(m => `
+    <div class="card">
+      <div class="r2">${thumb(m.logo, m.title)}
+        <div><b>${esc(m.title)}</b><br><small>${esc(m.catName || m.mode)} • ${m.status}</small></div></div>
+      Fee ₹${m.entryFee} | Kill ₹${m.perKill} | Booyah ₹${m.booyahPrize}<br>
+      Slots ${m.joined || 0}/${m.maxSlots}
+      <div class="btns">
+        <button onclick="setRoom('${m.id}')">Room</button>
+        <button onclick="setMatchLogo('${m.id}')">Logo</button>
+        <button class="ok" onclick="openResult('${m.id}')">Result</button>
+        <button class="red" onclick="cancelMatch('${m.id}')">Cancel</button>
+        <button class="red" onclick="delMatch('${m.id}')">Delete</button>
+      </div>
+    </div>`).join("") : "Koi match nahi";
+}
+
+window.setMatchLogo = async (id) => {
+  try {
+    const logo = await pickImage(256);
+    await updateDoc(doc(db, "matches", id), { logo });
+    alert("Logo badal gaya ✅"); loadMatches();
+  } catch (e) { if (e.message !== "no file") alert(e.message); }
+};
+
+window.setRoom = async (id) => {
+  const roomId = prompt("Room ID:"); if (!roomId) return;
+  const roomPass = prompt("Room Password:"); if (!roomPass) return;
+  try {
+    await setDoc(doc(db, "matches", id, "secret", "room"), { roomId, roomPass });
+    alert("Room save ho gaya");
+  } catch (e) { alert(e.message); }
+};
+
+window.delMatch = async (id) => {
+  if (!confirm("Match delete karna hai?")) return;
+  await deleteDoc(doc(db, "matches", id));
+  loadMatches();
+};
+
+window.cancelMatch = async (id) => {
+  const m = matches.find(x => x.id === id);
+  if (m.status !== "upcoming") { alert("Sirf upcoming match cancel hoga"); return; }
+  if (!confirm("Cancel karke sabko entry fee wapas deni hai?")) return;
+  try {
+    const s = await getDocs(collection(db, "matches", id, "players"));
+    for (const d of s.docs) {
+      await runTransaction(db, async (tx) => {
+        const uRef = doc(db, "users", d.id);
+        const u = (await tx.get(uRef)).data();
+        tx.update(uRef, { deposit: (u.deposit || 0) + m.entryFee });
+        tx.set(doc(collection(db, "transactions")), {
+          uid: d.id, type: "refund", amount: m.entryFee,
+          note: "Refund: " + m.title, createdAt: serverTimestamp()
+        });
+      });
+    }
+    await updateDoc(doc(db, "matches", id), { status: "cancelled" });
+    alert("Match cancel, refund ho gaya ✅");
+    loadMatches();
+  } catch (e) { alert(e.message); }
+};
+
+// ---------- Result ----------
+window.openResult = async (id) => {
+  const m = matches.find(x => x.id === id);
+  if (m.status !== "upcoming") { alert("Is match ka result/cancel ho chuka hai"); return; }
+  const s = await getDocs(collection(db, "matches", id, "players"));
+  players = s.docs.map(d => ({ id: d.id, ...d.data() }));
+  curMatch = m;
+  if (!players.length) { alert("Kisi ne join nahi kiya"); return; }
+  g("rBox").innerHTML = `<h3>${esc(m.title)} - Result</h3>` + players.map((p, i) => `
+    <div class="card">
+      <b>${esc(p.username)}</b> <small>UID ${esc(p.ffuid)} ${p.team ? "• Team " + esc(p.team) : ""}</small>
+      <input id="k${i}" type="number" placeholder="Kills" value="0">
+      <label><input type="checkbox" id="b${i}">Booyah</label>
+    </div>`).join("") +
+    `<button class="go" onclick="submitResult()">Result Submit + Prize Do</button>
+     <button class="go grey" onclick="show('pM')">Wapas</button>`;
+  show("pR");
+};
+
+window.submitResult = async () => {
+  if (!confirm("Pakka? Prize wallet me chala jayega, wapas nahi hoga.")) return;
+  const m = curMatch;
+  try {
+    for (let i = 0; i < players.length; i++) {
+      const kills = Number(g("k" + i).value) || 0;
+      const boo = g("b" + i).checked;
+      const prize = kills * (m.perKill || 0) + (boo ? (m.booyahPrize || 0) : 0);
+      const p = players[i];
+      await runTransaction(db, async (tx) => {
+        const uRef = doc(db, "users", p.id);
+        const u = (await tx.get(uRef)).data();
+        const nk = (u.kills || 0) + kills;
+        const nb = (u.booyahs || 0) + (boo ? 1 : 0);
+        const nt = (u.totalWinnings || 0) + prize;
+        tx.update(uRef, { winning: (u.winning || 0) + prize, totalWinnings: nt,
+                          kills: nk, booyahs: nb, matches: (u.matches || 0) + 1 });
+        tx.set(doc(db, "leaderboard", p.id),
+               { username: u.username, kills: nk, booyahs: nb, totalWinnings: nt });
+        if (prize > 0) tx.set(doc(collection(db, "transactions")), {
+          uid: p.id, type: "prize", amount: prize,
+          note: "Prize: " + m.title, createdAt: serverTimestamp()
+        });
+      });
+    }
+    await updateDoc(doc(db, "matches", m.id), { status: "completed" });
+    alert("Result ho gaya, prize mil gaya ✅");
+    loadMatches(); show("pM");
+  } catch (e) { alert(e.message); }
+};
+
+// ---------- Deposits ----------
+async function loadDeposits() {
+  const s = await getDocs(query(collection(db, "deposits"), where("status", "==", "pending")));
+  g("dList").innerHTML = s.empty ? "Koi pending deposit nahi" : s.docs.map(d => {
+    const x = d.data();
+    return `<div class="card"><b>${esc(x.username)}</b> • ₹${x.amount}<br>
+      <small>UTR: ${esc(x.utr)}</small>
+      <div class="btns">
+        <button class="ok" onclick="depOk('${d.id}')">Approve</button>
+        <button class="red" onclick="depNo('${d.id}')">Reject</button>
+      </div></div>`;
+  }).join("");
+}
+window.depOk = async (id) => {
+  if (!confirm("Did the money arrive in your UPI? Approve?")) return;
+  const MIN_REF_DEPOSIT = 50;
+  try {
+    await runTransaction(db, async (tx) => {
+      const dRef = doc(db, "deposits", id);
+      const d = (await tx.get(dRef)).data();
+      if (d.status !== "pending") throw new Error("Already processed");
+      const uRef = doc(db, "users", d.uid);
+      const u = (await tx.get(uRef)).data();
+      const rRef = doc(db, "referrals", d.uid);
+      const rSnap = await tx.get(rRef);
+      const sSnap = await tx.get(doc(db, "settings", "app"));
+      const st = sSnap.exists() ? sSnap.data() : {};
+
+      const eligible = rSnap.exists() && rSnap.data().status === "pending"
+        && d.amount >= MIN_REF_DEPOSIT && rSnap.data().referrer !== d.uid;
+      let bonusNew = 0, bonusRef = 0, refUid = "", refRef = null, refData = null;
+      if (eligible) {
+        bonusNew = st.refBonusNew || 0;
+        bonusRef = st.refBonus || 0;
+        refUid = rSnap.data().referrer;
+        refRef = doc(db, "users", refUid);
+        const rs = await tx.get(refRef);
+        if (rs.exists()) refData = rs.data(); else bonusRef = 0;
+      }
+
+      tx.update(uRef, { deposit: (u.deposit || 0) + d.amount + bonusNew });
+      tx.update(dRef, { status: "approved" });
+      tx.set(doc(collection(db, "transactions")), {
+        uid: d.uid, type: "deposit", amount: d.amount,
+        note: "Deposit approved", createdAt: serverTimestamp()
+      });
+      if (eligible) {
+        tx.update(rRef, { status: "paid" });
+        if (bonusNew > 0) tx.set(doc(collection(db, "transactions")), {
+          uid: d.uid, type: "bonus", amount: bonusNew,
+          note: "Referral welcome bonus", createdAt: serverTimestamp()
+        });
+        if (bonusRef > 0) {
+          tx.update(refRef, { deposit: (refData.deposit || 0) + bonusRef });
+          tx.set(doc(collection(db, "transactions")), {
+            uid: refUid, type: "bonus", amount: bonusRef,
+            note: "Referral bonus", createdAt: serverTimestamp()
+          });
+        }
+      }
+    });
+    refreshAll();
+  } catch (e) { alert(e.message); }
+};
+window.depNo = async (id) => {
+  await updateDoc(doc(db, "deposits", id), { status: "rejected" });
+  refreshAll();
+};
+
+// ---------- Withdrawals ----------
+async function loadWithdrawals() {
+  const s = await getDocs(query(collection(db, "withdrawals"), where("status", "==", "pending")));
+  g("wList").innerHTML = s.empty ? "Koi pending withdraw nahi" : s.docs.map(d => {
+    const x = d.data();
+    return `<div class="card"><b>${esc(x.username)}</b> • ₹${x.amount}<br>
+      <small>UPI: ${esc(x.upi)}</small>
+      <div class="btns">
+        <button class="ok" onclick="wdOk('${d.id}')">Paid Kar Diya</button>
+        <button class="red" onclick="wdNo('${d.id}')">Reject + Refund</button>
+      </div></div>`;
+  }).join("");
+}
+window.wdOk = async (id) => {
+  if (!confirm("Pehle UPI se paise bhej do, phir OK dabao")) return;
+  await updateDoc(doc(db, "withdrawals", id), { status: "paid" });
+  refreshAll();
+};
+window.wdNo = async (id) => {
+  if (!confirm("Reject karke paise wapas winning me daalne hain?")) return;
+  try {
+    await runTransaction(db, async (tx) => {
+      const wRef = doc(db, "withdrawals", id);
+      const w = (await tx.get(wRef)).data();
+      if (w.status !== "pending") throw new Error("Pehle hi ho chuka");
+      const uRef = doc(db, "users", w.uid);
+      const u = (await tx.get(uRef)).data();
+      tx.update(uRef, { winning: (u.winning || 0) + w.amount });
+      tx.update(wRef, { status: "rejected" });
+      tx.set(doc(collection(db, "transactions")), {
+        uid: w.uid, type: "refund", amount: w.amount,
+        note: "Withdraw rejected, refund", createdAt: serverTimestamp()
+      });
+    });
+    refreshAll();
+  } catch (e) { alert(e.message); }
+};
+// ============ NOTIFICATIONS ============
+async function nfSend(uid, title, body) {
+  try {
+    await addDoc(collection(db, "users", uid, "notifs"),
+      { title, body, createdAt: serverTimestamp() });
+    return true;
+  } catch (e) { return false; }
+}
+async function nfPlayers(matchId, title, body) {
+  const s = await getDocs(collection(db, "matches", matchId, "players"));
+  await Promise.all(s.docs.map(d => nfSend(d.id, title, body)));
+}
+const nfGet = async (...path) => {
+  const s = await getDoc(doc(db, ...path));
+  return s.exists() ? s.data() : null;
+};
+function nfWrap(name, before, after) {
+  const orig = window[name];
+  window[name] = async (...args) => {
+    let ctx = null;
+    try { ctx = await before(...args); } catch (e) {}
+    await orig(...args);
+    if (!ctx) return;
+    try { await after(ctx, ...args); } catch (e) { console.log(e); }
+  };
+}
+
+// Deposit approve
+nfWrap("depOk",
+  async (id) => {
+    const d = await nfGet("deposits", id);
+    const r = d ? await nfGet("referrals", d.uid) : null;
+    return d ? { d, ref: r ? r.status : null } : null;
+  },
+  async (ctx, id) => {
+    const d2 = await nfGet("deposits", id);
+    if (ctx.d.status !== "pending" || !d2 || d2.status !== "approved") return;
+    await nfSend(ctx.d.uid, "Deposit successful ✅",
+      "₹" + ctx.d.amount + " has been added to your wallet.");
+    if (ctx.ref === "pending") {
+      const r2 = await nfGet("referrals", ctx.d.uid);
+      if (r2 && r2.status === "paid") {
+        const st = (await nfGet("settings", "app")) || {};
+        if (st.refBonusNew > 0) await nfSend(ctx.d.uid, "Referral bonus 🎁",
+          "₹" + st.refBonusNew + " welcome bonus was added to your wallet.");
+        if (st.refBonus > 0) await nfSend(r2.referrer, "Referral bonus 🎁",
+          "Your friend's first deposit was approved. ₹" + st.refBonus + " was added to your wallet.");
+      }
+    }
+  });
+
+// Deposit reject
+nfWrap("depNo",
+  async (id) => nfGet("deposits", id),
+  async (d, id) => {
+    const d2 = await nfGet("deposits", id);
+    if (d.status === "pending" && d2 && d2.status === "rejected")
+      await nfSend(d.uid, "Deposit rejected",
+        "Your deposit request of ₹" + d.amount + " was rejected. If you already paid, please contact support.");
+  });
+
+// Withdraw paid
+nfWrap("wdOk",
+  async (id) => nfGet("withdrawals", id),
+  async (w, id) => {
+    const w2 = await nfGet("withdrawals", id);
+    if (w.status === "pending" && w2 && w2.status === "paid")
+      await nfSend(w.uid, "Withdrawal successful ✅",
+        "₹" + w.amount + " has been sent to your UPI ID " + w.upi + ".");
+  });
+
+// Withdraw reject
+nfWrap("wdNo",
+  async (id) => nfGet("withdrawals", id),
+  async (w, id) => {
+    const w2 = await nfGet("withdrawals", id);
+    if (w.status === "pending" && w2 && w2.status === "rejected")
+      await nfSend(w.uid, "Withdrawal rejected",
+        "Your withdrawal of ₹" + w.amount + " was rejected and the amount was refunded to your winning balance.");
+  });
+
+// Room ID / password
+nfWrap("setRoom",
+  async (id) => ({ r: await nfGet("matches", id, "secret", "room") }),
+  async (ctx, id) => {
+    const r1 = await nfGet("matches", id, "secret", "room");
+    if (!r1 || (ctx.r && ctx.r.roomId === r1.roomId && ctx.r.roomPass === r1.roomPass)) return;
+    const m = matches.find(x => x.id === id);
+    await nfPlayers(id, "Room details ready 🎮",
+      (m ? m.title : "Your match") + ": Room ID and password are now available. Open My Matches to view them.");
+  });
+
+// Match cancel
+nfWrap("cancelMatch",
+  async (id) => ({ m: await nfGet("matches", id) }),
+  async (ctx, id) => {
+    const m2 = await nfGet("matches", id);
+    if (ctx.m.status !== "upcoming" || !m2 || m2.status !== "cancelled") return;
+    await nfPlayers(id, "Match cancelled",
+      ctx.m.title + " was cancelled. Your entry fee of ₹" + ctx.m.entryFee + " was refunded to your deposit wallet.");
+  });
+
+// Result
+nfWrap("submitResult",
+  async () => {
+    const m = curMatch;
+    const items = players.map((p, i) => {
+      const kills = Number(g("k" + i).value) || 0, boo = g("b" + i).checked;
+      return { uid: p.id, kills, boo,
+               prize: kills * (m.perKill || 0) + (boo ? (m.booyahPrize || 0) : 0) };
+    });
+    return { m, items };
+  },
+  async (ctx) => {
+    const m2 = await nfGet("matches", ctx.m.id);
+    if (!m2 || m2.status !== "completed") return;
+    await Promise.all(ctx.items.map(it => nfSend(it.uid, "Match result 🏆",
+      ctx.m.title + ": " + it.kills + " kill(s)" + (it.boo ? " + Booyah" : "") + ". " +
+      (it.prize > 0 ? "₹" + it.prize + " was added to your winning balance."
+                    : "Better luck next time!"))));
+  });
+
+// ---------- "Notify" tab (apni marzi se bhejna) ----------
+(function () {
+  const tabs = document.querySelector(".tabs");
+  const t = document.createElement("div");
+  t.className = "tab"; t.dataset.p = "pN"; t.textContent = "Notify";
+  tabs.appendChild(t);
+
+  const pane = document.createElement("div");
+  pane.className = "pane"; pane.id = "pN";
+  pane.innerHTML = `
+    <h4>Send a notification</h4>
+    <select id="nTarget">
+      <option value="all">All users</option>
+      <option value="match">Players of a match</option>
+      <option value="user">One user</option>
+    </select>
+    <select id="nMatch" style="display:none"></select>
+    <input id="nUser" placeholder="Username or email" style="display:none">
+    <input id="nTitle" placeholder="Title">
+    <textarea id="nBody" rows="4" placeholder="Message"
+      style="width:100%;padding:12px;margin:5px 0;border:1px solid #ddd;border-radius:12px;font-size:15px"></textarea>
+    <button class="go" id="nSend">Send</button>
+    <div id="nRes" style="margin-top:10px;color:#777"></div>`;
+  g("app").appendChild(pane);
+
+  t.addEventListener("click", () => {
+    document.querySelectorAll(".tab").forEach(x => x.classList.remove("on"));
+    t.classList.add("on");
+    g("nMatch").innerHTML = matches.map(m => `<option value="${m.id}">${esc(m.title)}</option>`).join("");
+    show("pN");
+  });
+
+  g("nTarget").addEventListener("change", () => {
+    const v = g("nTarget").value;
+    g("nMatch").style.display = v === "match" ? "block" : "none";
+    g("nUser").style.display = v === "user" ? "block" : "none";
+  });
+
+  g("nSend").addEventListener("click", async () => {
+    const title = g("nTitle").value.trim(), body = g("nBody").value.trim();
+    if (!title || !body) { alert("Enter a title and a message"); return; }
+    const target = g("nTarget").value;
+    let ids = [];
+    try {
+      if (target === "all") {
+        ids = (await getDocs(collection(db, "users"))).docs.map(d => d.id);
+      } else if (target === "match") {
+        const mid = g("nMatch").value;
+        if (!mid) { alert("Choose a match"); return; }
+        ids = (await getDocs(collection(db, "matches", mid, "players"))).docs.map(d => d.id);
+      } else {
+        const v = g("nUser").value.trim();
+        if (!v) { alert("Enter a username or email"); return; }
+        let s = await getDocs(query(collection(db, "users"), where("username", "==", v)));
+        if (s.empty) s = await getDocs(query(collection(db, "users"), where("email", "==", v)));
+        ids = s.docs.map(d => d.id);
+      }
+      if (!ids.length) { alert("No users found"); return; }
+      if (!confirm("Send to " + ids.length + " user(s)?")) return;
+      g("nSend").disabled = true; g("nRes").textContent = "Sending...";
+      let ok = 0;
+      for (let i = 0; i < ids.length; i += 20) {
+        const r = await Promise.all(ids.slice(i, i + 20).map(u => nfSend(u, title, body)));
+        ok += r.filter(Boolean).length;
+      }
+      g("nRes").textContent = "Sent to " + ok + " of " + ids.length + " user(s) ✅";
+      g("nTitle").value = ""; g("nBody").value = "";
+    } catch (e) { alert(e.message); }
+    g("nSend").disabled = false;
+  });
+})();
+</script>
+</body>
+</html>

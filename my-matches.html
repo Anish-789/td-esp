@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TD ESP - My Matches</title>
+<style>
+  *{box-sizing:border-box;font-family:Arial,sans-serif}
+  body{margin:0;background:#fff;color:#222;padding-bottom:30px}
+  .top{display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid #eee}
+  .top b{font-size:20px;color:#ff6a00}
+  .back{font-size:22px}
+  .card{margin:12px 16px;padding:14px;border:1px solid #eee;border-radius:16px;
+        box-shadow:0 2px 8px rgba(0,0,0,.06);font-size:14px;line-height:1.7}
+  .card h3{margin:0}
+  .tag{display:inline-block;padding:2px 10px;border-radius:10px;font-size:12px;background:#fff3ea;color:#ff6a00}
+  .room{margin-top:10px;padding:12px;background:#f8f8f8;border-radius:12px}
+  .room b{font-size:16px}
+  .cp{margin-left:8px;border:1px solid #ff6a00;background:#fff;color:#ff6a00;border-radius:8px;padding:2px 8px;font-size:12px}
+  .empty{text-align:center;color:#888;margin-top:50px}
+</style>
+</head>
+<body>
+<div class="top">
+  <div class="back" onclick="location.href='home.html'">←</div>
+  <b>My Matches</b>
+</div>
+<div id="list"><div class="empty">Loading...</div></div>
+<script>
+  (function () {
+    var c = localStorage.getItem("c_mm_" + (localStorage.getItem("td_uid") || ""));
+    if (c) document.getElementById("list").innerHTML = c;
+  })();
+</script>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getFirestore, doc, getDoc, collection, getDocs }
+  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyDkwQvjVjrEQqpEIIgWKshbz538lGm7DL8",
+  authDomain: "td-esp.firebaseapp.com",
+  projectId: "td-esp",
+  storageBucket: "td-esp.firebasestorage.app",
+  messagingSenderId: "1074367636296",
+  appId: "1:1074367636296:web:65189df5578a98cbaa097d"
+};
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+const g = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c =>
+  ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
+
+window.cp = (t) => { navigator.clipboard.writeText(t); alert("Copied"); };
+
+onAuthStateChanged(auth, async (user) => {
+  if (!user) { location.href = "index.html"; return; }
+  try {
+    const all = await getDocs(collection(db, "matches"));
+    const ms = all.docs.map(d => ({ id: d.id, ...d.data() }));
+
+    // Kin matches me main joined hu
+    const checks = await Promise.all(
+      ms.map(m => getDoc(doc(db, "matches", m.id, "players", user.uid)))
+    );
+    const mine = ms.filter((m, i) => checks[i].exists())
+      .sort((a, b) => (b.startTime?.seconds || 0) - (a.startTime?.seconds || 0));
+
+    if (!mine.length) { g("list").innerHTML = '<div class="empty">Not join a</div>'; return; }
+
+    // Room details (sirf upcoming matches ke liye)
+    const rooms = await Promise.all(mine.map(async m => {
+      if (m.status !== "upcoming") return null;
+      try {
+        const r = await getDoc(doc(db, "matches", m.id, "secret", "room"));
+        return r.exists() ? r.data() : null;
+      } catch (e) { return null; }
+    }));
+
+    g("list").innerHTML = mine.map((m, i) => {
+      const t = m.startTime ? m.startTime.toDate().toLocaleString() : "-";
+      const label = m.status === "upcoming" ? "Upcoming"
+                  : m.status === "completed" ? "Completed" : "Cancelled (refunded)";
+      let room = "";
+      if (m.status === "upcoming") {
+        const r = rooms[i];
+        room = r
+          ? `<div class="room">Room ID: <b>${esc(r.roomId)}</b>
+               <button class="cp" onclick="cp('${esc(r.roomId)}')">Copy</button><br>
+             Password: <b>${esc(r.roomPass)}</b>
+               <button class="cp" onclick="cp('${esc(r.roomPass)}')">Copy</button></div>`
+          : `<div class="room">Room ID/Room ID and PASSWORD Will Arrive 10 Minutes</div>`;
+      }
+      return `<div class="card">
+        <h3>${esc(m.title)}</h3>
+        <span class="tag">${esc(m.mode)}</span> <span class="tag">${label}</span><br>
+        ${esc(m.map)} • ${t}<br>
+        Entry ₹${m.entryFee} | Per Kill ₹${m.perKill} | Booyah ₹${m.booyahPrize}
+        ${room}
+      </div>`;
+    }).join("");
+    try { localStorage.setItem("c_mm_" + user.uid, g("list").innerHTML); } catch (e) {}
+  } catch (e) {
+    g("list").innerHTML = '<div class="empty" style="color:#d00">Error: ' + esc(e.message) + '</div>';
+  }
+});
+
+// ============ NOTIFICATIONS (bell + popup) ============
+import * as FS from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+(function () {
+  const st = document.createElement("style");
+  st.textContent = `
+  .tbell{position:relative;width:40px;height:40px;border-radius:50%;background:#f4f4f4;
+         display:flex;align-items:center;justify-content:center;flex:none}
+  .tbell svg{width:22px;height:22px;stroke:#222;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+  .tbell i{position:absolute;top:-4px;right:-4px;min-width:18px;height:18px;border-radius:9px;
+           background:#e53935;color:#fff;font:bold 11px Arial;display:none;align-items:center;
+           justify-content:center;padding:0 4px;font-style:normal}
+  .ntoast{position:fixed;left:12px;right:12px;top:12px;z-index:99;background:#222;color:#fff;
+          border-radius:14px;padding:12px 14px;box-shadow:0 6px 20px rgba(0,0,0,.3);
+          transform:translateY(-160%);transition:transform .35s}
+  .ntoast.on{transform:translateY(0)}
+  .ntoast b{display:block;margin-bottom:2px}
+  .ntoast span{font-size:14px;color:#ddd}`;
+  document.head.appendChild(st);
+
+  const bell = document.createElement("div");
+  bell.className = "tbell";
+  bell.innerHTML = '<svg viewBox="0 0 24 24"><path d="M6 9a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6"/><path d="M10 19a2 2 0 0 0 4 0"/></svg><i></i>';
+  bell.onclick = () => { location.href = "notifications.html"; };
+  const w = document.getElementById("wallet");
+  const top = document.querySelector(".top");
+  if (w && w.parentElement && top && top.contains(w)) {
+    w.parentElement.prepend(bell);
+  } else if (top) {
+    top.style.position = "relative";
+    bell.style.cssText = "position:absolute;right:14px;top:5px";
+    top.appendChild(bell);
+  }
+
+  const toast = document.createElement("div");
+  toast.className = "ntoast";
+  toast.onclick = () => { location.href = "notifications.html"; };
+  document.body.appendChild(toast);
+  let tm = null;
+  function pop(title, body) {
+    toast.innerHTML = "<b></b><span></span>";
+    toast.querySelector("b").textContent = title;
+    toast.querySelector("span").textContent = body;
+    toast.classList.add("on");
+    if (navigator.vibrate) navigator.vibrate(200);
+    clearTimeout(tm);
+    tm = setTimeout(() => toast.classList.remove("on"), 5000);
+  }
+
+  let seen = 0, first = true;
+  auth.onAuthStateChanged(async (user) => {
+    if (!user) return;
+    try {
+      const u = await FS.getDoc(FS.doc(db, "users", user.uid));
+      seen = (u.exists() && u.data().notifSeen) || 0;
+    } catch (e) {}
+    const q = FS.query(FS.collection(db, "users", user.uid, "notifs"),
+                       FS.orderBy("createdAt", "desc"), FS.limit(30));
+    FS.onSnapshot(q, (snap) => {
+      let unread = 0;
+      snap.docs.forEach(d => {
+        const c = d.data().createdAt;
+        if (c && c.toMillis() > seen) unread++;
+      });
+      const b = bell.querySelector("i");
+      b.textContent = unread > 9 ? "9+" : unread;
+      b.style.display = unread ? "flex" : "none";
+      if (!first) snap.docChanges().forEach(ch => {
+        if (ch.type === "added" && ch.doc.data().createdAt)
+          pop(ch.doc.data().title, ch.doc.data().body);
+      });
+      first = false;
+    }, () => {});
+  });
+})();
+</script>
+</body>
+</html>

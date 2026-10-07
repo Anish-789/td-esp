@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wallet</title>
+<style>
+  *{box-sizing:border-box;font-family:Arial,sans-serif}
+  body{margin:0;background:#fff;color:#222;padding-bottom:100px}
+  .top{padding:14px 16px;border-bottom:1px solid #eee;font-weight:bold;font-size:20px;color:#ff6a00}
+  .bal{margin:16px;padding:18px;border-radius:16px;background:#fff3ea}
+  .bal .big{font-size:32px;font-weight:bold;color:#ff6a00}
+  .bal .small{display:flex;justify-content:space-between;margin-top:10px;font-size:14px;color:#555}
+  .tabs{display:flex;gap:8px;padding:0 16px}
+  .tab{flex:1;text-align:center;padding:10px;border-radius:12px;background:#f4f4f4;font-weight:bold}
+  .tab.on{background:#ff6a00;color:#fff}
+  .pane{display:none;padding:16px}
+  .pane.on{display:block}
+  input{width:100%;padding:14px;margin:8px 0;border:1px solid #ddd;border-radius:12px;font-size:16px}
+  input:focus{outline:none;border-color:#ff6a00}
+  button.go{width:100%;padding:14px;border:none;border-radius:12px;background:#ff6a00;color:#fff;font-size:17px;margin-top:8px}
+  .note{background:#f8f8f8;padding:12px;border-radius:12px;font-size:14px;color:#555;line-height:1.6}
+  .chips{display:flex;gap:8px;margin:6px 0 4px}
+  .chips span{flex:1;text-align:center;padding:10px 0;border:1px solid #ffd2b3;border-radius:10px;
+              background:#fff7f1;color:#ff6a00;font-weight:bold}
+  .item{display:flex;justify-content:space-between;padding:12px 0;border-bottom:1px solid #eee;font-size:14px}
+  .plus{color:green;font-weight:bold}.minus{color:#d00;font-weight:bold}
+  .nav{position:fixed;bottom:0;left:0;right:0;display:flex;background:#fff;border-top:1px solid #eee;padding-bottom:env(safe-area-inset-bottom)}
+  .nav div{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px 0 12px;font-size:13px;font-weight:bold;color:#999}
+  .nav svg{width:28px;height:28px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+  .nav .on{color:#ff6a00}
+</style>
+</head>
+<body>
+<div class="top">Wallet</div>
+
+<div class="bal">
+  <div>Total Balance</div>
+  <div class="big" id="total">₹0</div>
+  <div class="small"><span>Deposit: <b id="dep">₹0</b></span><span>Winning: <b id="win">₹0</b></span></div>
+</div>
+
+<div class="tabs">
+  <div class="tab on" data-p="p1">Deposit</div>
+  <div class="tab" data-p="p2">Withdraw</div>
+  <div class="tab" data-p="p3">History</div>
+</div>
+
+<div class="pane on" id="p1">
+  <div class="note">Enter the amount you want to add. On the next page you will see the QR code and UPI ID to pay.</div>
+  <input id="dAmt" type="number" inputmode="numeric" placeholder="Amount (₹)">
+  <div class="chips">
+    <span data-a="50">₹50</span><span data-a="100">₹100</span>
+    <span data-a="200">₹200</span><span data-a="500">₹500</span>
+  </div>
+  <button class="go" id="dBtn">Proceed to Pay</button>
+</div>
+
+<div class="pane" id="p2">
+  <div class="note">Only winning balance can be withdrawn. Minimum ₹50.</div>
+  <input id="wAmt" type="number" placeholder="Amount (₹)">
+  <input id="wUpi" placeholder="Your UPI ID">
+  <button class="go" id="wBtn">Send Withdraw Request</button>
+</div>
+
+<div class="pane" id="p3"><div id="hist">Loading...</div></div>
+
+<div style="text-align:center;margin:10px 16px 0">
+  <a href="support.html" style="color:#ff6a00;font-weight:bold;text-decoration:none">
+    Problem with deposit or withdrawal? Get help</a>
+</div>
+
+<div class="nav">
+  <div onclick="location.href='home.html'">
+    <svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h5v-6h4v6h5V10"/></svg>Home</div>
+  <div class="on" onclick="location.href='wallet.html'">
+    <svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="14" rx="3"/><path d="M3 10h18"/><circle cx="16.5" cy="15" r="1.2"/></svg>Wallet</div>
+  <div onclick="location.href='leaderboard.html'">
+    <svg viewBox="0 0 24 24"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0V4z"/><path d="M17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3"/></svg>Leaderboard</div>
+  <div onclick="location.href='profile.html'">
+    <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg>Profile</div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getFirestore, doc, getDoc, collection, getDocs, query, where,
+         runTransaction, serverTimestamp }
+  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+const MIN_WITHDRAW = 50;
+
+const firebaseConfig = {
+  apiKey: "AIzaSyDkwQvjVjrEQqpEIIgWKshbz538lGm7DL8",
+  authDomain: "td-esp.firebaseapp.com",
+  projectId: "td-esp",
+  storageBucket: "td-esp.firebasestorage.app",
+  messagingSenderId: "1074367636296",
+  appId: "1:1074367636296:web:65189df5578a98cbaa097d"
+};
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+const g = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c =>
+  ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
+
+let me = null, meData = null;
+
+onAuthStateChanged(auth, async (user) => {
+  if (!user) { location.href = "index.html"; return; }
+  me = user;
+  await loadAll();
+});
+
+async function loadAll() {
+  const s = await getDoc(doc(db, "users", me.uid));
+  meData = s.data();
+  const d = meData.deposit || 0, w = meData.winning || 0;
+  g("dep").textContent = "₹" + d;
+  g("win").textContent = "₹" + w;
+  g("total").textContent = "₹" + (d + w);
+  loadHistory();
+}
+
+async function loadHistory() {
+  try {
+    const get = async (name) => {
+      const s = await getDocs(query(collection(db, name), where("uid", "==", me.uid)));
+      return s.docs.map(x => x.data());
+    };
+    const [tr, de, wi] = await Promise.all([get("transactions"), get("deposits"), get("withdrawals")]);
+    const all = [
+      ...tr.map(x => ({ t: x.createdAt, text: x.note || x.type, amt: x.amount, st: "" })),
+      ...de.map(x => ({ t: x.createdAt, text: "Deposit request", amt: x.amount, st: x.status })),
+      ...wi.map(x => ({ t: x.createdAt, text: "Withdraw request", amt: -x.amount, st: x.status }))
+    ].sort((a, b) => (b.t?.seconds || 0) - (a.t?.seconds || 0));
+
+    g("hist").innerHTML = all.length ? all.map(x => `
+      <div class="item">
+        <div>${esc(x.text)}<br><small style="color:#888">${x.t ? x.t.toDate().toLocaleString() : ""} ${x.st ? "• " + esc(x.st) : ""}</small></div>
+        <div class="${x.amt >= 0 ? "plus" : "minus"}">${x.amt >= 0 ? "+" : ""}₹${x.amt}</div>
+      </div>`).join("") : "No history yet";
+  } catch (e) { g("hist").textContent = "Error: " + e.message; }
+}
+
+document.querySelectorAll(".tab").forEach(t => t.addEventListener("click", () => {
+  document.querySelectorAll(".tab").forEach(x => x.classList.remove("on"));
+  document.querySelectorAll(".pane").forEach(x => x.classList.remove("on"));
+  t.classList.add("on");
+  g(t.dataset.p).classList.add("on");
+}));
+
+// Deposit: amount choose karo, phir pay page par jao
+document.querySelectorAll(".chips span").forEach(c =>
+  c.addEventListener("click", () => { g("dAmt").value = c.dataset.a; }));
+
+g("dBtn").addEventListener("click", () => {
+  const amt = Math.floor(Number(g("dAmt").value));
+  if (!amt || amt < 10) { alert("Minimum deposit is ₹10"); return; }
+  if (amt > 50000) { alert("Maximum deposit is ₹50,000"); return; }
+  location.href = "pay.html?amt=" + amt;
+});
+
+g("wBtn").addEventListener("click", async () => {
+  const amt = Number(g("wAmt").value), upi = g("wUpi").value.trim();
+  if (!amt || amt < MIN_WITHDRAW || !upi) { alert("Minimum ₹" + MIN_WITHDRAW + " and enter your UPI ID"); return; }
+  try {
+    await runTransaction(db, async (tx) => {
+      const uRef = doc(db, "users", me.uid);
+      const u = (await tx.get(uRef)).data();
+      if ((u.winning || 0) < amt) throw new Error("Insufficient winning balance");
+      tx.update(uRef, { winning: u.winning - amt });
+      tx.set(doc(collection(db, "withdrawals")), {
+        uid: me.uid, username: u.username, amount: amt, upi,
+        status: "pending", createdAt: serverTimestamp()
+      });
+    });
+    alert("Withdraw request sent.");
+    g("wAmt").value = ""; g("wUpi").value = "";
+    loadAll();
+  } catch (e) { alert(e.message); }
+});
+
+// ============ NOTIFICATIONS (bell + popup) ============
+import * as FS from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+(function () {
+  const st = document.createElement("style");
+  st.textContent = `
+  .tbell{position:relative;width:40px;height:40px;border-radius:50%;background:#f4f4f4;
+         display:flex;align-items:center;justify-content:center;flex:none}
+  .tbell svg{width:22px;height:22px;stroke:#222;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+  .tbell i{position:absolute;top:-4px;right:-4px;min-width:18px;height:18px;border-radius:9px;
+           background:#e53935;color:#fff;font:bold 11px Arial;display:none;align-items:center;
+           justify-content:center;padding:0 4px;font-style:normal}
+  .ntoast{position:fixed;left:12px;right:12px;top:12px;z-index:99;background:#222;color:#fff;
+          border-radius:14px;padding:12px 14px;box-shadow:0 6px 20px rgba(0,0,0,.3);
+          transform:translateY(-160%);transition:transform .35s}
+  .ntoast.on{transform:translateY(0)}
+  .ntoast b{display:block;margin-bottom:2px}
+  .ntoast span{font-size:14px;color:#ddd}`;
+  document.head.appendChild(st);
+
+  const bell = document.createElement("div");
+  bell.className = "tbell";
+  bell.innerHTML = '<svg viewBox="0 0 24 24"><path d="M6 9a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6"/><path d="M10 19a2 2 0 0 0 4 0"/></svg><i></i>';
+  bell.onclick = () => { location.href = "notifications.html"; };
+  const w = document.getElementById("wallet");
+  const top = document.querySelector(".top");
+  if (w && w.parentElement && top && top.contains(w)) {
+    w.parentElement.prepend(bell);
+  } else if (top) {
+    top.style.position = "relative";
+    bell.style.cssText = "position:absolute;right:14px;top:5px";
+    top.appendChild(bell);
+  }
+
+  const toast = document.createElement("div");
+  toast.className = "ntoast";
+  toast.onclick = () => { location.href = "notifications.html"; };
+  document.body.appendChild(toast);
+  let tm = null;
+  function pop(title, body) {
+    toast.innerHTML = "<b></b><span></span>";
+    toast.querySelector("b").textContent = title;
+    toast.querySelector("span").textContent = body;
+    toast.classList.add("on");
+    if (navigator.vibrate) navigator.vibrate(200);
+    clearTimeout(tm);
+    tm = setTimeout(() => toast.classList.remove("on"), 5000);
+  }
+
+  let seen = 0, first = true;
+  auth.onAuthStateChanged(async (user) => {
+    if (!user) return;
+    try {
+      const u = await FS.getDoc(FS.doc(db, "users", user.uid));
+      seen = (u.exists() && u.data().notifSeen) || 0;
+    } catch (e) {}
+    const q = FS.query(FS.collection(db, "users", user.uid, "notifs"),
+                       FS.orderBy("createdAt", "desc"), FS.limit(30));
+    FS.onSnapshot(q, (snap) => {
+      let unread = 0;
+      seen = Math.max(seen, window.__seen || 0);
+      snap.docs.forEach(d => {
+        const c = d.data().createdAt;
+        if (c && c.toMillis() > seen) unread++;
+      });
+      const b = bell.querySelector("i");
+      b.textContent = unread > 9 ? "9+" : unread;
+      b.style.display = unread ? "flex" : "none";
+      if (!first) snap.docChanges().forEach(ch => {
+        if (ch.type === "added" && ch.doc.data().createdAt)
+          pop(ch.doc.data().title, ch.doc.data().body);
+      });
+      first = false;
+    }, () => {});
+  });
+})();
+</script>
+</body>
+</html>

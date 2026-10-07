@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Leaderboard</title>
+<style>
+  *{box-sizing:border-box;font-family:Arial,sans-serif}
+  body{margin:0;background:#fff;color:#222;padding-bottom:100px}
+  .top{padding:14px 16px;border-bottom:1px solid #eee;font-weight:bold;font-size:20px;color:#ff6a00}
+  .tabs{display:flex;gap:8px;padding:12px 16px}
+  .tab{flex:1;text-align:center;padding:10px;border-radius:12px;background:#f4f4f4;font-weight:bold;font-size:14px}
+  .tab.on{background:#ff6a00;color:#fff}
+  .pod{display:flex;align-items:flex-end;justify-content:center;gap:8px;padding:10px 16px}
+  .p{flex:1;text-align:center;background:#fff3ea;border-radius:14px;padding:12px 6px}
+  .p.first{padding-top:26px;background:#ffe3cf}
+  .p .rk{font-size:24px}
+  .p .n{font-weight:bold;font-size:14px;word-break:break-word}
+  .p .v{color:#ff6a00;font-weight:bold}
+  .row{display:flex;align-items:center;padding:12px 16px;border-bottom:1px solid #eee}
+  .row .r{width:36px;color:#888;font-weight:bold}
+  .row .n{flex:1}
+  .row .v{color:#ff6a00;font-weight:bold}
+  .me{margin:12px 16px;padding:12px;border-radius:12px;background:#f4f4f4;text-align:center}
+  .nav{position:fixed;bottom:0;left:0;right:0;display:flex;background:#fff;border-top:1px solid #eee;padding-bottom:env(safe-area-inset-bottom)}
+  .nav div{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px 0 12px;font-size:13px;font-weight:bold;color:#999}
+  .nav svg{width:28px;height:28px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+  .nav .on{color:#ff6a00}
+</style>
+</head>
+<body>
+<div class="top">Leaderboard</div>
+
+<div class="tabs">
+  <div class="tab on" data-f="kills">Kills</div>
+  <div class="tab" data-f="booyahs">Booyahs</div>
+  <div class="tab" data-f="totalWinnings">Winnings</div>
+</div>
+
+<div class="me" id="me">...</div>
+<div class="pod" id="pod"></div>
+<div id="list"></div>
+
+<div class="nav">
+  <div onclick="location.href='home.html'">
+    <svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h5v-6h4v6h5V10"/></svg>Home</div>
+  <div onclick="location.href='wallet.html'">
+    <svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="14" rx="3"/><path d="M3 10h18"/><circle cx="16.5" cy="15" r="1.2"/></svg>Wallet</div>
+  <div class="on" onclick="location.href='leaderboard.html'">
+    <svg viewBox="0 0 24 24"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0V4z"/><path d="M17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3"/></svg>Leaderboard</div>
+  <div onclick="location.href='profile.html'">
+    <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg>Profile</div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getAuth, onAuthStateChanged }
+  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getFirestore, collection, getDocs, query, orderBy, limit }
+  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyDkwQvjVjrEQqpEIIgWKshbz538lGm7DL8",
+  authDomain: "td-esp.firebaseapp.com",
+  projectId: "td-esp",
+  storageBucket: "td-esp.firebasestorage.app",
+  messagingSenderId: "1074367636296",
+  appId: "1:1074367636296:web:65189df5578a98cbaa097d"
+};
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+const g = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c =>
+  ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
+
+let me = null, field = "kills";
+
+onAuthStateChanged(auth, (user) => {
+  if (!user) { location.href = "index.html"; return; }
+  me = user;
+  load();
+});
+
+async function load() {
+  try {
+    const q = query(collection(db, "leaderboard"), orderBy(field, "desc"), limit(20));
+    const snap = await getDocs(q);
+    const rows = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const fmt = v => field === "totalWinnings" ? "₹" + (v || 0) : (v || 0);
+
+    const idx = rows.findIndex(r => r.id === me.uid);
+    g("me").textContent = idx >= 0 ? "My Rank: #" + (idx + 1)
+      : rows.length < 20 ? "My Rank: No result yet" : "outside";
+
+    const medals = ["🥇", "🥈", "🥉"];
+    const order = [1, 0, 2];
+    g("pod").innerHTML = order.filter(i => rows[i]).map(i => `
+      <div class="p ${i === 0 ? "first" : ""}">
+        <div class="rk">${medals[i]}</div>
+        <div class="n">${esc(rows[i].username)}</div>
+        <div class="v">${fmt(rows[i][field])}</div>
+      </div>`).join("");
+
+    g("list").innerHTML = rows.slice(3).map((r, i) => `
+      <div class="row">
+        <div class="r">#${i + 4}</div>
+        <div class="n">${esc(r.username)}</div>
+        <div class="v">${fmt(r[field])}</div>
+      </div>`).join("");
+
+    if (!rows.length) g("list").innerHTML = '<div style="text-align:center;color:#888;margin-top:30px">Abhi koi data nahi</div>';
+  } catch (e) {
+    g("list").innerHTML = '<div style="padding:16px;color:#d00">Error: ' + esc(e.message) + '</div>';
+  }
+}
+
+document.querySelectorAll(".tab").forEach(t => t.addEventListener("click", () => {
+  document.querySelectorAll(".tab").forEach(x => x.classList.remove("on"));
+  t.classList.add("on");
+  field = t.dataset.f;
+  load();
+}));
+
+// ============ NOTIFICATIONS (bell + popup) ============
+import * as FS from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+(function () {
+  const st = document.createElement("style");
+  st.textContent = `
+  .tbell{position:relative;width:40px;height:40px;border-radius:50%;background:#f4f4f4;
+         display:flex;align-items:center;justify-content:center;flex:none}
+  .tbell svg{width:22px;height:22px;stroke:#222;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+  .tbell i{position:absolute;top:-4px;right:-4px;min-width:18px;height:18px;border-radius:9px;
+           background:#e53935;color:#fff;font:bold 11px Arial;display:none;align-items:center;
+           justify-content:center;padding:0 4px;font-style:normal}
+  .ntoast{position:fixed;left:12px;right:12px;top:12px;z-index:99;background:#222;color:#fff;
+          border-radius:14px;padding:12px 14px;box-shadow:0 6px 20px rgba(0,0,0,.3);
+          transform:translateY(-160%);transition:transform .35s}
+  .ntoast.on{transform:translateY(0)}
+  .ntoast b{display:block;margin-bottom:2px}
+  .ntoast span{font-size:14px;color:#ddd}`;
+  document.head.appendChild(st);
+
+  const bell = document.createElement("div");
+  bell.className = "tbell";
+  bell.innerHTML = '<svg viewBox="0 0 24 24"><path d="M6 9a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6"/><path d="M10 19a2 2 0 0 0 4 0"/></svg><i></i>';
+  bell.onclick = () => { location.href = "notifications.html"; };
+  const w = document.getElementById("wallet");
+  const top = document.querySelector(".top");
+  if (w && w.parentElement && top && top.contains(w)) {
+    w.parentElement.prepend(bell);
+  } else if (top) {
+    top.style.position = "relative";
+    bell.style.cssText = "position:absolute;right:14px;top:5px";
+    top.appendChild(bell);
+  }
+
+  const toast = document.createElement("div");
+  toast.className = "ntoast";
+  toast.onclick = () => { location.href = "notifications.html"; };
+  document.body.appendChild(toast);
+  let tm = null;
+  function pop(title, body) {
+    toast.innerHTML = "<b></b><span></span>";
+    toast.querySelector("b").textContent = title;
+    toast.querySelector("span").textContent = body;
+    toast.classList.add("on");
+    if (navigator.vibrate) navigator.vibrate(200);
+    clearTimeout(tm);
+    tm = setTimeout(() => toast.classList.remove("on"), 5000);
+  }
+
+  let seen = 0, first = true;
+  auth.onAuthStateChanged(async (user) => {
+    if (!user) return;
+    try {
+      const u = await FS.getDoc(FS.doc(db, "users", user.uid));
+      seen = (u.exists() && u.data().notifSeen) || 0;
+    } catch (e) {}
+    const q = FS.query(FS.collection(db, "users", user.uid, "notifs"),
+                       FS.orderBy("createdAt", "desc"), FS.limit(30));
+    FS.onSnapshot(q, (snap) => {
+        let unread = 0;
+      seen = Math.max(seen, window.__seen || 0);
+      snap.docs.forEach(d => {
+        const c = d.data().createdAt;
+        if (c && c.toMillis() > seen) unread++;
+      });
+      const b = bell.querySelector("i");
+      b.textContent = unread > 9 ? "9+" : unread;
+      b.style.display = unread ? "flex" : "none";
+      if (!first) snap.docChanges().forEach(ch => {
+        if (ch.type === "added" && ch.doc.data().createdAt)
+          pop(ch.doc.data().title, ch.doc.data().body);
+      });
+      first = false;
+    }, () => {});
+  });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Support (Admin)</title>
+<style>
+  *{box-sizing:border-box;font-family:Arial,sans-serif}
+  body{margin:0;background:#fff;color:#222;padding-bottom:40px}
+  .top{display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid #eee}
+  .top b{font-size:20px;color:#ff6a00}
+  .back{font-size:24px;padding:0 6px}
+  .wrap{padding:14px 16px}
+  .card{border:1px solid #eee;border-radius:14px;padding:12px;margin-bottom:12px;font-size:14px;line-height:1.6}
+  .card small{color:#888}
+  .btns{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+  .btns button{flex:1;padding:10px;border:1px solid #ff6a00;background:#fff;color:#ff6a00;border-radius:10px;font-size:14px}
+  .btns button.red{border-color:#d00;color:#d00}
+  .btns button.ok{background:#ff6a00;color:#fff}
+  select,textarea{width:100%;padding:12px;margin:5px 0;border:1px solid #ddd;border-radius:12px;font-size:15px}
+  .go{width:100%;padding:14px;border:none;border-radius:12px;background:#ff6a00;color:#fff;font-size:16px;margin-top:8px}
+  #msg{padding:40px 16px;text-align:center;color:#d00}
+</style>
+</head>
+<body>
+<div class="top">
+  <div class="back" onclick="location.href='admin.html'">←</div>
+  <b>Support (Admin)</b>
+</div>
+<div id="msg">Loading...</div>
+<div class="wrap" id="box" style="display:none"></div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getFirestore, doc, getDoc, collection, getDocs, addDoc, updateDoc, serverTimestamp }
+  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyDkwQvjVjrEQqpEIIgWKshbz538lGm7DL8",
+  authDomain: "td-esp.firebaseapp.com",
+  projectId: "td-esp",
+  storageBucket: "td-esp.firebasestorage.app",
+  messagingSenderId: "1074367636296",
+  appId: "1:1074367636296:web:65189df5578a98cbaa097d"
+};
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+const g = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c =>
+  ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
+const fmt = ts => ts && ts.toDate ? ts.toDate().toLocaleString() : "";
+const LBL = { open: "Waiting for reply", answered: "Replied", closed: "Closed" };
+
+let list = [], filter = "open", cur = null;
+
+async function notify(uid, title, body) {
+  try {
+    await addDoc(collection(db, "users", uid, "notifs"),
+      { title, body, createdAt: serverTimestamp() });
+  } catch (e) {}
+}
+
+onAuthStateChanged(auth, async (user) => {
+  if (!user) { location.href = "index.html"; return; }
+  const u = (await getDoc(doc(db, "users", user.uid))).data();
+  if (!u || u.role !== "admin") { g("msg").textContent = "Access denied (admin only)"; return; }
+  g("msg").style.display = "none";
+  g("box").style.display = "block";
+  load();
+});
+
+async function load() {
+  try {
+    const s = await getDocs(collection(db, "tickets"));
+    list = s.docs.map(d => ({ id: d.id, ...d.data() }))
+      .sort((a, b) => (b.updatedAt?.seconds || 0) - (a.updatedAt?.seconds || 0));
+    renderList();
+  } catch (e) { g("box").innerHTML = '<p style="color:#d00">Error: ' + esc(e.message) + '</p>'; }
+}
+
+function renderList() {
+  cur = null;
+  const items = list.filter(x => filter === "all" || x.status === filter);
+  const n = list.filter(x => x.status === "open").length;
+  g("box").innerHTML =
+    '<p><b>' + n + '</b> ticket(s) waiting for reply</p>' +
+    `<select id="f">
+       <option value="open">Waiting for reply</option>
+       <option value="answered">Replied</option>
+       <option value="closed">Closed</option>
+       <option value="all">All</option></select>` +
+    (items.length ? items.map(x => `
+      <div class="card"><b>${esc(x.username)}</b> • <small>${esc(x.category)}</small><br>
+        <small>${LBL[x.status] || esc(x.status)} • ${fmt(x.updatedAt)}</small><br>${esc(x.last || "")}
+        <div class="btns"><button class="ok" onclick="openT('${x.id}')">Open</button></div>
+      </div>`).join("") : "<p>No tickets here.</p>");
+  g("f").value = filter;
+  g("f").onchange = () => { filter = g("f").value; renderList(); };
+}
+
+window.openT = async (id) => {
+  cur = list.find(x => x.id === id);
+  const s = await getDocs(collection(db, "tickets", id, "msgs"));
+  const msgs = s.docs.map(d => d.data())
+    .sort((a, b) => (a.createdAt?.seconds || 0) - (b.createdAt?.seconds || 0));
+  g("box").innerHTML = `
+    <div class="btns" style="margin:0 0 10px"><button onclick="back()">← Back</button></div>
+    <div class="card"><b>${esc(cur.username)}</b> • <small>${esc(cur.category)} • ${LBL[cur.status] || esc(cur.status)}</small></div>
+    ${msgs.map(m => `
+      <div class="card" style="${m.from === "admin" ? "background:#fff7f1" : ""}">
+        <small>${m.from === "admin" ? "You (admin)" : esc(cur.username)} • ${fmt(m.createdAt)}</small><br>
+        ${esc(m.text).replace(/\n/g, "<br>")}
+      </div>`).join("")}
+    <textarea id="r" rows="3" placeholder="Write a reply..."></textarea>
+    <button class="go" onclick="reply()">Send Reply</button>
+    <div class="btns">
+      <button class="red" onclick="closeT()">Close ticket</button>
+      <button onclick="reopen()">Reopen</button>
+    </div>`;
+};
+
+window.back = () => load();
+
+window.reply = async () => {
+  const text = g("r").value.trim();
+  if (!text) return;
+  const tk = cur;
+  try {
+    await addDoc(collection(db, "tickets", tk.id, "msgs"),
+      { from: "admin", text, createdAt: serverTimestamp() });
+    await updateDoc(doc(db, "tickets", tk.id), {
+      status: "answered", lastFrom: "admin", last: text.slice(0, 80), updatedAt: serverTimestamp()
+    });
+    await notify(tk.uid, "Support reply 💬",
+      "Admin replied to your " + tk.category + " ticket. Open Help & Support to read it.");
+    await load();
+    window.openT(tk.id);
+  } catch (e) { alert(e.message); }
+};
+
+window.closeT = async () => {
+  if (!confirm("Close this ticket?")) return;
+  const tk = cur;
+  try {
+    await updateDoc(doc(db, "tickets", tk.id), { status: "closed", updatedAt: serverTimestamp() });
+    await notify(tk.uid, "Ticket closed", "Your " + tk.category + " ticket has been closed.");
+    load();
+  } catch (e) { alert(e.message); }
+};
+
+window.reopen = async () => {
+  const tk = cur;
+  try {
+    await updateDoc(doc(db, "tickets", tk.id), { status: "answered", updatedAt: serverTimestamp() });
+    await load();
+    window.openT(tk.id);
+  } catch (e) { alert(e.message); }
+};
+</script>
+</body>
+</html>

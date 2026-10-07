@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Notifications</title>
+<style>
+  *{box-sizing:border-box;font-family:Arial,sans-serif}
+  body{margin:0;background:#fff;color:#222}
+  .top{display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid #eee}
+  .top b{font-size:20px;color:#ff6a00;flex:1}
+  .back{font-size:24px;padding:0 6px}
+  #clr{border:1px solid #ddd;background:#fff;color:#888;border-radius:10px;padding:8px 12px;font-size:13px}
+  .n{margin:12px 16px;padding:14px;border:1px solid #eee;border-radius:14px}
+  .n.new{background:#fff7f1;border-color:#ffd2b3}
+  .n h4{margin:0 0 4px;font-size:16px}
+  .n p{margin:0 0 8px;color:#555;font-size:14px;line-height:1.5}
+  .n small{color:#999}
+  .empty{text-align:center;color:#888;margin-top:60px}
+</style>
+</head>
+<body>
+<div class="top">
+  <div class="back" onclick="location.href='home.html'">←</div>
+  <b>Notifications</b>
+  <button id="clr">Clear all</button>
+</div>
+<div id="list"><div class="empty">Loading...</div></div>
+<script>
+  (function () {
+    var c = localStorage.getItem("c_notif_" + (localStorage.getItem("td_uid") || ""));
+    if (c) document.getElementById("list").innerHTML = c;
+  })();
+</script>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getFirestore, doc, getDoc, updateDoc, deleteDoc, collection, getDocs, query, orderBy, limit }
+  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyDkwQvjVjrEQqpEIIgWKshbz538lGm7DL8",
+  authDomain: "td-esp.firebaseapp.com",
+  projectId: "td-esp",
+  storageBucket: "td-esp.firebasestorage.app",
+  messagingSenderId: "1074367636296",
+  appId: "1:1074367636296:web:65189df5578a98cbaa097d"
+};
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+const g = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c =>
+  ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
+
+let me = null, docs = [];
+
+onAuthStateChanged(auth, async (user) => {
+  if (!user) { location.href = "index.html"; return; }
+  me = user;
+  const uRef = doc(db, "users", user.uid);
+  let seen = 0;
+  try { seen = (await getDoc(uRef)).data().notifSeen || 0; } catch (e) {}
+  try {
+    const q = query(collection(db, "users", user.uid, "notifs"), orderBy("createdAt", "desc"), limit(50));
+    docs = (await getDocs(q)).docs;
+    g("list").innerHTML = docs.length ? docs.map(d => {
+      const x = d.data();
+      const ms = x.createdAt && x.createdAt.toMillis ? x.createdAt.toMillis() : 0;
+      return `<div class="n ${ms > seen ? "new" : ""}">
+        <h4>${esc(x.title)}</h4><p>${esc(x.body)}</p>
+        <small>${ms ? new Date(ms).toLocaleString() : ""}</small></div>`;
+    }).join("") : '<div class="empty">No notifications yet</div>';
+        try { localStorage.setItem("c_notif_" + user.uid,
+      g("list").innerHTML.replace(/class="n new"/g, 'class="n "')); } catch (e) {}
+    await updateDoc(uRef, { notifSeen: Date.now() });
+  } catch (e) { g("list").innerHTML = '<div class="empty">Error: ' + esc(e.message) + '</div>'; }
+});
+
+g("clr").addEventListener("click", async () => {
+  if (!docs.length || !confirm("Delete all notifications?")) return;
+  await Promise.all(docs.map(d => deleteDoc(d.ref)));
+    g("list").innerHTML = '<div class="empty">No notifications yet</div>';
+  localStorage.removeItem("c_notif_" + me.uid);
+  docs = [];
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>TD ESP</title>
+<style>
+  *{box-sizing:border-box;font-family:Arial,sans-serif}
+  html,body{margin:0;height:100%;background:#fff;overflow:hidden}
+  #frames{position:fixed;left:0;right:0;top:0;bottom:calc(68px + env(safe-area-inset-bottom));
+          display:flex;align-items:center;justify-content:center;color:#bbb;font-weight:bold}
+  #frames iframe{position:absolute;inset:0;width:100%;height:100%;border:0;display:none;background:transparent}
+  #frames iframe.on{display:block}
+  #ov{position:fixed;inset:0;width:100%;height:100%;border:0;background:#fff;display:none;z-index:15}
+  #ov.on{display:block;animation:slide .22s ease}
+  @keyframes slide{from{transform:translateX(24px);opacity:.4}to{transform:none;opacity:1}}
+  .nav{position:fixed;left:0;right:0;bottom:0;height:calc(68px + env(safe-area-inset-bottom));
+       display:flex;background:#fff;border-top:1px solid #eee;
+       padding-bottom:env(safe-area-inset-bottom);z-index:5}
+  .nav div{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+           gap:4px;font-size:13px;font-weight:bold;color:#999}
+  .nav svg{width:28px;height:28px;stroke:currentColor;fill:none;stroke-width:1.8;
+           stroke-linecap:round;stroke-linejoin:round}
+  .nav .on{color:#ff6a00}
+  #boot{position:fixed;inset:0;background:#fff;display:flex;align-items:center;justify-content:center;
+        color:#ff6a00;font-weight:bold;font-size:22px;z-index:30}
+</style>
+</head>
+<body>
+<div id="boot">Loading...</div>
+<div id="frames">Loading...</div>
+
+<div class="nav" id="nav">
+  <div data-tab="home" class="on">
+    <svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h5v-6h4v6h5V10"/></svg>Home</div>
+  <div data-tab="wallet">
+    <svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="14" rx="3"/><path d="M3 10h18"/><circle cx="16.5" cy="15" r="1.2"/></svg>Wallet</div>
+  <div data-tab="leaderboard">
+    <svg viewBox="0 0 24 24"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0V4z"/><path d="M17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3"/></svg>Leaderboard</div>
+  <div data-tab="profile">
+    <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg>Profile</div>
+</div>
+
+<iframe id="ov"></iframe>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyDkwQvjVjrEQqpEIIgWKshbz538lGm7DL8",
+  authDomain: "td-esp.firebaseapp.com",
+  projectId: "td-esp",
+  storageBucket: "td-esp.firebasestorage.app",
+  messagingSenderId: "1074367636296",
+  appId: "1:1074367636296:web:65189df5578a98cbaa097d"
+};
+const auth = getAuth(initializeApp(firebaseConfig));
+const g = id => document.getElementById(id);
+
+const TABS = ["home", "wallet", "leaderboard", "profile"];
+const fr = {};
+const ov = g("ov");
+let allowNav = false, started = false, preloaded = false, current = "home", ovFile = "";
+
+TABS.forEach(t => {
+  const f = document.createElement("iframe");
+  f.id = "f-" + t;
+  f.addEventListener("load", () => hook(f));
+  g("frames").appendChild(f);
+  fr[t] = f;
+});
+ov.addEventListener("load", () => hook(ov));
+
+function allow() {
+  allowNav = true;
+  setTimeout(() => { allowNav = false; }, 600);
+}
+function setSrc(f, url) { allow(); f.src = url; }
+function pageOf(f) {
+  try { return f.contentWindow.location.pathname.split("/").pop(); } catch (e) { return ""; }
+}
+
+/* ---------- Tabs ---------- */
+function openTab(name, fromNav) {
+  if (!TABS.includes(name)) return;
+  const f = fr[name];
+  const want = name + ".html";
+  const here = pageOf(f);
+
+  if (fromNav && name === current && here === want) {
+    try { f.contentWindow.scrollTo({ top: 0, behavior: "smooth" }); } catch (e) {}
+  } else if (!f.getAttribute("src") || (here && here !== "blank" && here !== want)) {
+    setSrc(f, want);
+  }
+  TABS.forEach(t => fr[t].classList.toggle("on", t === name));
+  document.querySelectorAll("#nav div").forEach(d =>
+    d.classList.toggle("on", d.dataset.tab === name));
+  current = name;
+}
+document.querySelectorAll("#nav div").forEach(d =>
+  d.addEventListener("click", () => { closeOverlay(); openTab(d.dataset.tab, true); }));
+
+/* ---------- Upar wali layer (Notifications, My Matches, Help, Pay) ---------- */
+function openOverlay(url) {
+  allow();
+  ov.src = url;
+  ov.classList.add("on");
+}
+function closeOverlay() {
+  if (!ov.classList.contains("on")) return;
+  const from = ovFile;
+  ov.classList.remove("on");
+  allow();
+  ov.src = "about:blank";
+  ovFile = "";
+
+  if (from === "notifications.html") {          // bell ki ginti hata do
+    TABS.forEach(t => {
+      try {
+        const w2 = fr[t].contentWindow;
+        w2.__seen = Date.now();
+        w2.document.querySelectorAll(".tbell i").forEach(i => { i.style.display = "none"; });
+      } catch (e) {}
+    });
+  }
+  if (from === "pay.html") setSrc(fr[current], current + ".html");   // wallet refresh
+}
+
+/* ---------- Har page load hone par ---------- */
+function hook(f) {
+  const isOv = f === ov;
+  let w, d;
+  try { w = f.contentWindow; d = f.contentDocument; if (!d || !d.head) return; } catch (e) { return; }
+  const file0 = pageOf(f);
+  if (file0 === "blank" || file0 === "") return;
+  if (isOv) ovFile = file0;
+
+  const st = d.createElement("style");
+  st.textContent = ".nav{display:none!important}body{padding-bottom:16px!important}";
+  d.head.appendChild(st);
+
+  if (w.navigation) {
+    w.navigation.addEventListener("navigate", (e) => {
+      try {
+        if (allowNav || !e.cancelable) return;
+        if (e.navigationType === "reload" || e.navigationType === "traverse") return;
+        const u = new URL(e.destination.url);
+        if (u.origin !== location.origin) return;
+        const file = u.pathname.split("/").pop();
+        const tab = file.replace(".html", "");
+
+        if (file === "index.html" || file === "") {
+          e.preventDefault();
+          location.href = "index.html";
+        } else if (TABS.includes(tab)) {
+          e.preventDefault();
+          if (isOv) closeOverlay(); else openTab(tab);
+        } else if (!isOv && /\.html$/.test(file)) {
+          e.preventDefault();
+          openOverlay(file + u.search);
+        }
+      } catch (err) {}
+    });
+  }
+
+  if (f === fr.home && !preloaded) {
+    preloaded = true;
+    g("boot").style.display = "none";
+    ["wallet", "leaderboard", "profile"].forEach((t, i) => {
+      setTimeout(() => { if (!fr[t].getAttribute("src")) setSrc(fr[t], t + ".html"); }, 800 * (i + 1));
+    });
+  }
+}
+
+onAuthStateChanged(auth, (user) => {
+  if (!user) { location.href = "index.html"; return; }
+  if (started) return;
+  started = true;
+  try { localStorage.setItem("td_uid", user.uid); } catch (e) {}
+  openTab("home");
+  setTimeout(() => { g("boot").style.display = "none"; }, 8000);
+});
+</script>
+</body>
+</html>

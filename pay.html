@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Add Money</title>
+<style>
+  *{box-sizing:border-box;font-family:Arial,sans-serif}
+  body{margin:0;background:#fff;color:#222;padding-bottom:40px}
+  .top{display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid #eee}
+  .top b{font-size:20px;color:#ff6a00}
+  .back{font-size:24px;padding:0 6px}
+  .wrap{padding:16px}
+  .amt{background:#fff3ea;border-radius:16px;padding:16px;text-align:center}
+  .amt span{color:#777;font-size:14px}
+  .amt b{display:block;font-size:34px;color:#ff6a00;margin-top:4px}
+  .step{display:flex;align-items:center;gap:10px;margin:20px 0 10px;font-weight:bold;font-size:15px}
+  .step .n{width:26px;height:26px;border-radius:50%;background:#ff6a00;color:#fff;
+           display:flex;align-items:center;justify-content:center;font-size:14px;flex:none}
+  .pay{text-align:center;border:1px solid #eee;border-radius:16px;padding:16px}
+  .pay img{width:230px;max-width:100%;border-radius:12px;display:none;margin:0 auto 12px}
+  .upi{display:flex;align-items:center;justify-content:center;gap:8px;font-size:17px;font-weight:bold;word-break:break-all}
+  .cp{border:1px solid #ff6a00;background:#fff;color:#ff6a00;border-radius:8px;padding:5px 12px;font-size:13px}
+  a.app{display:none;margin-top:14px;padding:13px;border-radius:12px;background:#fff;color:#ff6a00;
+        border:1px solid #ff6a00;text-decoration:none;font-weight:bold}
+  input{width:100%;padding:14px;border:1px solid #ddd;border-radius:12px;font-size:16px;text-transform:uppercase}
+  input:focus{outline:none;border-color:#ff6a00}
+  .hint{color:#888;font-size:13px;margin:8px 2px;line-height:1.5}
+  .err{color:#d00;font-size:14px;min-height:20px;margin:6px 2px}
+  button.go{width:100%;padding:15px;border:none;border-radius:12px;background:#ff6a00;color:#fff;font-size:17px;font-weight:bold}
+  button.go:disabled{background:#ccc}
+  .done{display:none;text-align:center;padding:50px 24px}
+  .tick{width:84px;height:84px;border-radius:50%;background:#e8f8ee;margin:0 auto 16px;
+        display:flex;align-items:center;justify-content:center}
+  .tick svg{width:46px;height:46px;stroke:#1c9c4b;fill:none;stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
+  .done h2{margin:0 0 8px}
+  .done p{color:#777;line-height:1.6;margin:0 0 22px}
+</style>
+</head>
+<body>
+<div class="top">
+  <div class="back" onclick="location.href='wallet.html'">←</div>
+  <b>Add Money</b>
+</div>
+
+<div class="wrap" id="main">
+  <div class="amt"><span>Amount to pay</span><b id="amt">₹0</b></div>
+
+  <div class="step"><div class="n">1</div>Scan the QR code or pay to the UPI ID</div>
+  <div class="pay">
+    <img id="qr" alt="Payment QR">
+    <div class="upi"><span id="upi">Loading...</span><button class="cp" id="cpUpi">Copy</button></div>
+    <a class="app" id="appPay">Pay with UPI app</a>
+  </div>
+
+  <div class="step"><div class="n">2</div>After paying, enter the UTR / Transaction ID</div>
+  <input id="utr" placeholder="UTR / Transaction ID" autocapitalize="characters">
+  <div class="hint">You can find it in your UPI app under the payment details (usually a 12 digit number).</div>
+  <div class="err" id="err"></div>
+  <button class="go" id="sub">Submit Payment Details</button>
+</div>
+
+<div class="done" id="done">
+  <div class="tick"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></div>
+  <h2>Request sent</h2>
+  <p id="doneTxt">Admin will verify your payment and add the money to your wallet shortly.</p>
+  <button class="go" onclick="location.href='wallet.html'">Back to Wallet</button>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getFirestore, doc, getDoc, collection, addDoc, serverTimestamp }
+  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyDkwQvjVjrEQqpEIIgWKshbz538lGm7DL8",
+  authDomain: "td-esp.firebaseapp.com",
+  projectId: "td-esp",
+  storageBucket: "td-esp.firebasestorage.app",
+  messagingSenderId: "1074367636296",
+  appId: "1:1074367636296:web:65189df5578a98cbaa097d"
+};
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+const g = id => document.getElementById(id);
+
+const amt = Math.floor(Number(new URLSearchParams(location.search).get("amt")));
+if (!amt || amt < 10 || amt > 50000) location.href = "wallet.html";
+g("amt").textContent = "₹" + amt;
+
+let me = null, username = "", upiId = "";
+
+onAuthStateChanged(auth, async (user) => {
+  if (!user) { location.href = "index.html"; return; }
+  me = user;
+  try {
+    const u = (await getDoc(doc(db, "users", user.uid))).data();
+    username = u.username || "";
+    const s = await getDoc(doc(db, "settings", "app"));
+    const d = s.exists() ? s.data() : {};
+    upiId = d.upiId || "";
+    g("upi").textContent = upiId || "UPI ID not set by admin yet";
+    if (d.payQr) { g("qr").src = d.payQr; g("qr").style.display = "block"; }
+    if (upiId) {
+      const a = g("appPay");
+      a.href = "upi://pay?pa=" + encodeURIComponent(upiId) +
+               "&pn=" + encodeURIComponent(d.name || "TD ESP") +
+               "&am=" + amt + "&cu=INR";
+      a.style.display = "block";
+    }
+  } catch (e) { g("upi").textContent = "Could not load payment details"; }
+});
+
+g("cpUpi").addEventListener("click", () => {
+  if (!upiId) return;
+  navigator.clipboard.writeText(upiId);
+  alert("UPI ID copied");
+});
+
+g("sub").addEventListener("click", async () => {
+  const utr = g("utr").value.trim().toUpperCase();
+  const err = g("err");
+  err.textContent = "";
+  if (!/^[A-Z0-9]{8,22}$/.test(utr)) {
+    err.textContent = "Please enter a valid UTR / Transaction ID";
+    return;
+  }
+  const btn = g("sub");
+  btn.disabled = true;
+  btn.textContent = "Submitting...";
+  try {
+    await addDoc(collection(db, "deposits"), {
+      uid: me.uid, username, amount: amt, utr,
+      status: "pending", createdAt: serverTimestamp()
+    });
+    g("doneTxt").textContent = "We received your request for ₹" + amt +
+      ". Admin will verify your payment and add the money to your wallet shortly.";
+    g("main").style.display = "none";
+    g("done").style.display = "block";
+  } catch (e) {
+    err.textContent = e.message;
+    btn.disabled = false;
+    btn.textContent = "Submit Payment Details";
+  }
+});
+</script>
+</body>
+</html>

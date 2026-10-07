@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Login</title>
+<style>
+  *{box-sizing:border-box;font-family:Arial,sans-serif}
+  body{margin:0;background:#fff;color:#222;display:flex;justify-content:center}
+  .box{width:100%;max-width:420px;padding:28px 20px}
+  h1{color:#ff6a00;text-align:center;margin-bottom:4px}
+  p.sub{text-align:center;color:#888;margin-top:0}
+  input{width:100%;padding:14px;margin:8px 0;border:1px solid #ddd;border-radius:12px;font-size:16px}
+  input:focus{outline:none;border-color:#ff6a00}
+  button{width:100%;padding:14px;border:none;border-radius:12px;background:#ff6a00;color:#fff;font-size:17px;margin-top:10px}
+  button:disabled{background:#ccc}
+  .link{text-align:center;color:#ff6a00;margin-top:16px;padding:10px}
+  #msg{text-align:center;margin-top:12px;color:#d00;word-break:break-word}
+  .hide{display:none}
+</style>
+</head>
+<body>
+<div class="box">
+  <h1>TD ESP</h1>
+  <p class="sub">Free Fire MAX Tournaments</p>
+
+  <input id="username" class="hide" placeholder="Username">
+  <input id="ffuid" class="hide" placeholder="Free Fire UID" inputmode="numeric">
+  <input id="email" type="email" placeholder="Email">
+  <input id="password" type="password" placeholder="Password (min 6)">
+  <input id="refcode" class="hide" placeholder="Referral code (optional)" style="text-transform:uppercase">
+
+  <button id="btn">Login</button>
+  <div class="link" id="toggle">Create new account</div>
+  <div id="msg"></div>
+</div>
+
+<script>
+  window.isRegister = false;
+  var $ = function(id){ return document.getElementById(id); };
+  $("toggle").addEventListener("click", function(){
+    window.isRegister = !window.isRegister;
+    ["username","ffuid","refcode"].forEach(function(i){
+      $(i).classList.toggle("hide", !window.isRegister);
+    });
+    $("btn").textContent = window.isRegister ? "Register" : "Login";
+    $("toggle").textContent = window.isRegister
+      ? "Already have an account? Login" : "Create new account";
+    $("msg").textContent = "";
+  });
+  window.addEventListener("error", function(e){ $("msg").textContent = "Error: " + e.message; });
+</script>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword }
+  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getFirestore, doc, getDoc, setDoc, serverTimestamp }
+  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyDkwQvjVjrEQqpEIIgWKshbz538lGm7DL8",
+  authDomain: "td-esp.firebaseapp.com",
+  projectId: "td-esp",
+  storageBucket: "td-esp.firebasestorage.app",
+  messagingSenderId: "1074367636296",
+  appId: "1:1074367636296:web:65189df5578a98cbaa097d"
+};
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+auth.onAuthStateChanged((u) => {
+  if (u && !document.getElementById("btn").disabled) location.href = "app.html";
+});
+const g = id => document.getElementById(id);
+
+const ALPHA = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+const genCode = () => Array.from({ length: 6 },
+  () => ALPHA[Math.floor(Math.random() * ALPHA.length)]).join("");
+
+async function claimCode(uid) {
+  for (let i = 0; i < 5; i++) {
+    const code = genCode();
+    try { await setDoc(doc(db, "refCodes", code), { uid }); return code; } catch (e) {}
+  }
+  return "";
+}
+
+g("btn").addEventListener("click", async () => {
+  const email = g("email").value.trim();
+  const pass = g("password").value;
+  const msg = g("msg"), btn = g("btn");
+  msg.style.color = "#d00";
+  msg.textContent = "Please wait...";
+  btn.disabled = true;
+  try {
+    if (window.isRegister) {
+      const username = g("username").value.trim();
+      const ffuid = g("ffuid").value.trim();
+      const rc = g("refcode").value.trim().toUpperCase();
+      if (!username || !ffuid) { msg.textContent = "Enter username and Free Fire UID"; btn.disabled = false; return; }
+
+      let referrer = "";
+      if (rc) {
+        const r = await getDoc(doc(db, "refCodes", rc));
+        if (!r.exists()) { msg.textContent = "Invalid referral code"; btn.disabled = false; return; }
+        referrer = r.data().uid;
+      }
+
+      const cred = await createUserWithEmailAndPassword(auth, email, pass);
+      const uid = cred.user.uid;
+      const myCode = await claimCode(uid);
+      await setDoc(doc(db, "users", uid), {
+        username, ffuid, email, refCode: myCode,
+        deposit: 0, winning: 0, bonus: 0, totalWinnings: 0,
+        matches: 0, kills: 0, booyahs: 0,
+        role: "user",
+        createdAt: serverTimestamp()
+      });
+      if (referrer && referrer !== uid) {
+        await setDoc(doc(db, "referrals", uid),
+          { referrer, status: "pending", createdAt: serverTimestamp() });
+      }
+    } else {
+      await signInWithEmailAndPassword(auth, email, pass);
+    }
+        location.href = "app.html";
+  } catch (e) {
+    msg.textContent = e.message;
+    btn.disabled = false;
+  }
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Home</title>
+<style>
+  *{box-sizing:border-box;font-family:Arial,sans-serif}
+  body{margin:0;background:#fff;color:#222;padding-bottom:100px}
+  .top{display:flex;justify-content:space-between;align-items:center;
+       padding:12px 16px;border-bottom:1px solid #eee;position:sticky;top:0;background:#fff;z-index:5}
+  .brand{display:flex;align-items:center;gap:10px;color:#ff6a00;font-weight:bold;font-size:20px}
+  .brand img{width:38px;height:38px;border-radius:10px;object-fit:cover}
+  .pill{background:#fff3ea;color:#ff6a00;padding:8px 12px;border-radius:20px;font-weight:bold;
+        display:flex;align-items:center;gap:6px}
+  .pill.grey{background:#f4f4f4;color:#222}
+  .pill svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+  .cats{display:flex;gap:10px;overflow-x:auto;padding:14px 16px}
+  .cat{flex:none;width:76px;display:flex;flex-direction:column;align-items:center;gap:6px;
+       font-size:13px;font-weight:bold;color:#666;text-align:center}
+  .cat .ic{width:60px;height:60px;border-radius:18px;background:#f4f4f4;overflow:hidden;
+           display:flex;align-items:center;justify-content:center;border:2px solid transparent;
+           font-size:22px;color:#ff6a00}
+  .cat .ic img{width:100%;height:100%;object-fit:cover}
+  .cat.on{color:#ff6a00}
+  .cat.on .ic{border-color:#ff6a00;background:#fff3ea}
+  .card{margin:12px 16px;padding:14px;border:1px solid #eee;border-radius:16px;
+        box-shadow:0 2px 8px rgba(0,0,0,.06)}
+  .ch{display:flex;gap:12px;align-items:center;margin-bottom:10px}
+  .lg{width:56px;height:56px;border-radius:14px;background:#fff3ea;overflow:hidden;flex:none;
+      display:flex;align-items:center;justify-content:center;font-size:22px;color:#ff6a00;font-weight:bold}
+  .lg img{width:100%;height:100%;object-fit:cover}
+  .ch h3{margin:0 0 4px}
+  .meta{color:#888;font-size:14px}
+  .row{display:flex;justify-content:space-between;font-size:14px;margin:4px 0}
+  .bar{height:6px;background:#eee;border-radius:6px;margin:10px 0}
+  .bar div{height:6px;background:#ff6a00;border-radius:6px}
+  .join{width:100%;padding:14px;border:none;border-radius:12px;background:#ff6a00;color:#fff;font-size:16px;font-weight:bold}
+  .join:disabled{background:#ccc}
+  .empty{text-align:center;color:#888;margin-top:40px}
+
+  /* Join popup */
+  .ov{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;align-items:flex-end;z-index:30}
+  .ov.on{display:flex}
+  .sheet{width:100%;max-height:92vh;overflow:auto;background:#fff;border-radius:24px 24px 0 0;
+         padding:12px 18px calc(22px + env(safe-area-inset-bottom));animation:up .25s ease}
+  @keyframes up{from{transform:translateY(100%)}to{transform:translateY(0)}}
+  .grab{width:44px;height:5px;border-radius:5px;background:#ddd;margin:0 auto 14px}
+  .sum{background:#fff3ea;border-radius:14px;padding:12px 14px;margin:14px 0}
+  .sum .row{font-size:15px;margin:6px 0}
+  .sheet label{display:block;font-size:13px;color:#777;margin:12px 0 4px;font-weight:bold}
+  .sheet input{width:100%;padding:14px;border:1px solid #ddd;border-radius:12px;font-size:16px}
+  .sheet input:focus{outline:none;border-color:#ff6a00}
+  .err{color:#d00;font-size:14px;min-height:20px;margin:10px 0 4px}
+  .warn{background:#fff0f0;color:#c00;border-radius:12px;padding:10px 12px;font-size:14px;margin-bottom:6px}
+  .ghost{width:100%;padding:14px;border:none;background:none;color:#888;font-size:16px;margin-top:4px}
+  .ok{text-align:center;padding:10px 0}
+  .ok .tick{width:78px;height:78px;border-radius:50%;background:#e8f8ee;margin:8px auto 14px;
+            display:flex;align-items:center;justify-content:center}
+  .ok .tick svg{width:44px;height:44px;stroke:#1c9c4b;fill:none;stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
+  .ok h2{margin:0 0 6px}
+  .ok p{color:#777;margin:0 0 16px;line-height:1.5}
+
+  .nav{position:fixed;bottom:0;left:0;right:0;display:flex;background:#fff;border-top:1px solid #eee;padding-bottom:env(safe-area-inset-bottom)}
+  .nav div{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px 0 12px;font-size:13px;font-weight:bold;color:#999}
+  .nav svg{width:28px;height:28px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+  .nav .on{color:#ff6a00}
+</style>
+</head>
+<body>
+
+<div class="top">
+  <div class="brand"><img id="appLogo" style="display:none"><span id="appName">TD ESP</span></div>
+  <div style="display:flex;gap:8px">
+    <div class="pill grey" onclick="location.href='my-matches.html'">
+      <svg viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="11" rx="5"/><path d="M7 10.5v4M5 12.5h4"/><path d="M16 11.5h.01M18.5 13.5h.01"/></svg>My
+    </div>
+    <div class="pill" id="wallet">₹0</div>
+  </div>
+</div>
+
+<div class="cats" id="cats"></div>
+<div id="list"></div>
+
+<div class="ov" id="ov"><div class="sheet" id="sheet"></div></div>
+
+<div class="nav">
+  <div class="on" onclick="location.href='home.html'">
+    <svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h5v-6h4v6h5V10"/></svg>Home</div>
+  <div onclick="location.href='wallet.html'">
+    <svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="14" rx="3"/><path d="M3 10h18"/><circle cx="16.5" cy="15" r="1.2"/></svg>Wallet</div>
+  <div onclick="location.href='leaderboard.html'">
+    <svg viewBox="0 0 24 24"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0V4z"/><path d="M17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3"/></svg>Leaderboard</div>
+  <div onclick="location.href='profile.html'">
+    <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg>Profile</div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getAuth, onAuthStateChanged }
+  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getFirestore, doc, getDoc, collection, getDocs,
+         query, where, runTransaction, serverTimestamp }
+  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyDkwQvjVjrEQqpEIIgWKshbz538lGm7DL8",
+  authDomain: "td-esp.firebaseapp.com",
+  projectId: "td-esp",
+  storageBucket: "td-esp.firebasestorage.app",
+  messagingSenderId: "1074367636296",
+  appId: "1:1074367636296:web:65189df5578a98cbaa097d"
+};
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+const g = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c =>
+  ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
+const imgOr = (src, name) => src
+  ? `<img src="${esc(src)}">` : esc((name || "?")[0].toUpperCase());
+
+let cats = [], matches = [], catId = null;
+let wBal = 0, wShown = 0, cur = null;
+
+onAuthStateChanged(auth, async (user) => {
+  if (!user) { location.href = "index.html"; return; }
+  const snap = await getDoc(doc(db, "users", user.uid));
+  if (snap.exists()) {
+    const u = snap.data();
+    wBal = (u.deposit || 0) + (u.winning || 0);
+    wShown = wBal + (u.bonus || 0);
+    g("wallet").textContent = "₹" + wShown;
+  }
+  await loadSettings();
+  await loadCats();
+  await loadMatches();
+});
+
+async function loadSettings() {
+  try {
+    const s = await getDoc(doc(db, "settings", "app"));
+    if (s.exists()) {
+      const d = s.data();
+      if (d.name) { g("appName").textContent = d.name; document.title = d.name; }
+      if (d.logo) { g("appLogo").src = d.logo; g("appLogo").style.display = "block"; }
+    }
+  } catch (e) {}
+}
+
+async function loadCats() {
+  try {
+    const s = await getDocs(collection(db, "categories"));
+    cats = s.docs.map(d => ({ id: d.id, ...d.data() }))
+      .sort((a, b) => (a.order || 0) - (b.order || 0));
+  } catch (e) { cats = []; }
+  if (!cats.length) {
+    cats = [{ id: "solo", name: "Solo", teamSize: 1 },
+            { id: "duo", name: "Duo", teamSize: 2 },
+            { id: "squad", name: "Squad", teamSize: 4 }];
+  }
+  catId = cats[0].id;
+  renderCats();
+}
+
+function renderCats() {
+  g("cats").innerHTML = cats.map(c => `
+    <div class="cat ${c.id === catId ? "on" : ""}" onclick="selectCat('${c.id}')">
+      <div class="ic">${imgOr(c.logo, c.name)}</div>${esc(c.name)}
+    </div>`).join("");
+}
+window.selectCat = (id) => { catId = id; renderCats(); render(); };
+
+async function loadMatches() {
+  try {
+    const q = query(collection(db, "matches"), where("status", "==", "upcoming"));
+    const snap = await getDocs(q);
+    matches = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+      .sort((a, b) => (a.startTime?.seconds || 0) - (b.startTime?.seconds || 0));
+    render();
+  } catch (e) {
+    g("list").innerHTML = '<div class="empty">Error: ' + esc(e.message) + '</div>';
+  }
+}
+
+function render() {
+  const items = matches.filter(m => (m.catId || m.mode) === catId);
+  if (!items.length) {
+    g("list").innerHTML = '<div class="empty">No matches available right now</div>';
+    return;
+  }
+  g("list").innerHTML = items.map(m => {
+    const t = m.startTime ? m.startTime.toDate().toLocaleString() : "-";
+    const pct = Math.min(100, Math.round(((m.joined||0) / m.maxSlots) * 100));
+    return `
+      <div class="card">
+        <div class="ch">
+          <div class="lg">${imgOr(m.logo, m.title)}</div>
+          <div><h3>${esc(m.title)}</h3><div class="meta">${esc(m.map)} • ${t}</div></div>
+        </div>
+        <div class="row"><span>Entry Fee</span><b>₹${m.entryFee}</b></div>
+        <div class="row"><span>Per Kill</span><b>₹${m.perKill}</b></div>
+        <div class="row"><span>Booyah Prize</span><b>₹${m.booyahPrize}</b></div>
+        <div class="row"><span>Prize Pool</span><b>₹${m.prizePool}</b></div>
+        <div class="bar"><div style="width:${pct}%"></div></div>
+        <div class="row"><span>${m.joined||0}/${m.maxSlots} slots filled</span></div>
+        <button class="join" onclick="openJoin('${m.id}')">Join Now</button>
+      </div>`;
+  }).join("");
+}
+
+/* ---------- Join popup ---------- */
+function closeSheet() { g("ov").classList.remove("on"); }
+window.closeSheet = closeSheet;
+g("ov").addEventListener("click", (e) => { if (e.target === g("ov")) closeSheet(); });
+
+window.openJoin = (id) => {
+  const m = matches.find(x => x.id === id);
+  const cat = cats.find(c => c.id === (m.catId || m.mode));
+  const size = m.teamSize || (cat && cat.teamSize) || 1;
+  cur = { m, size };
+  const t = m.startTime ? m.startTime.toDate().toLocaleString() : "-";
+  const low = wBal < m.entryFee;
+
+  let fields = "";
+  if (size > 1) {
+    fields += '<label>Team Name</label><input id="jTeam" placeholder="Enter your team name" maxlength="20">';
+    for (let i = 1; i < size; i++) {
+      fields += '<label>Teammate ' + i + ' Free Fire UID</label>' +
+                '<input id="jM' + i + '" inputmode="numeric" placeholder="Enter UID">';
+    }
+  }
+
+  g("sheet").innerHTML = `
+    <div class="grab"></div>
+    <div class="ch">
+      <div class="lg">${imgOr(m.logo, m.title)}</div>
+      <div><h3>${esc(m.title)}</h3><div class="meta">${esc(m.map)} • ${t}</div></div>
+    </div>
+    <div class="sum">
+      <div class="row"><span>Entry Fee</span><b>₹${m.entryFee}</b></div>
+      <div class="row"><span>Your Balance</span><b>₹${wBal}</b></div>
+    </div>
+    ${low ? '<div class="warn">Your balance is too low. Please add money in Wallet first.</div>' : ""}
+    ${fields}
+    <div class="err" id="jErr"></div>
+    ${low
+      ? '<button class="join" onclick="location.href=\'wallet.html\'">Add Money</button>'
+      : '<button class="join" id="jGo" onclick="confirmJoin()">Confirm &amp; Join · ₹' + m.entryFee + '</button>'}
+    <button class="ghost" onclick="closeSheet()">Cancel</button>`;
+  g("ov").classList.add("on");
+};
+
+window.confirmJoin = async () => {
+  const { m, size } = cur;
+  const err = g("jErr");
+  err.textContent = "";
+  let team = "", mates = [];
+
+  if (size > 1) {
+    team = g("jTeam").value.trim();
+    if (!team) { err.textContent = "Please enter a team name"; return; }
+    for (let i = 1; i < size; i++) {
+      const v = g("jM" + i).value.trim();
+      if (!/^\d{5,}$/.test(v)) {
+        err.textContent = "Enter a valid Free Fire UID for teammate " + i;
+        return;
+      }
+      mates.push(v);
+    }
+  }
+
+  const btn = g("jGo");
+  btn.disabled = true;
+  btn.textContent = "Joining...";
+  const user = auth.currentUser;
+
+  try {
+    await runTransaction(db, async (tx) => {
+      const mRef = doc(db, "matches", m.id);
+      const uRef = doc(db, "users", user.uid);
+      const pRef = doc(db, "matches", m.id, "players", user.uid);
+      const mSnap = await tx.get(mRef);
+      const uSnap = await tx.get(uRef);
+      const pSnap = await tx.get(pRef);
+      const match = mSnap.data();
+      const u = uSnap.data();
+
+      if (pSnap.exists()) throw new Error("You have already joined this match");
+      if ((match.joined || 0) >= match.maxSlots) throw new Error("This match is full");
+      const dep = u.deposit || 0, win = u.winning || 0;
+      if (dep + win < match.entryFee)
+        throw new Error("Insufficient balance. Please add money in Wallet first");
+
+      const useDep = Math.min(dep, match.entryFee);
+      const useWin = match.entryFee - useDep;
+      tx.update(uRef, { deposit: dep - useDep, winning: win - useWin });
+      tx.update(mRef, { joined: (match.joined || 0) + 1 });
+      tx.set(pRef, {
+        uid: user.uid, username: u.username, ffuid: u.ffuid,
+        team, mates: mates.join(", "), kills: 0, joinedAt: serverTimestamp()
+      });
+      tx.set(doc(collection(db, "transactions")), {
+        uid: user.uid, type: "entry", amount: -match.entryFee,
+        note: "Joined " + match.title, createdAt: serverTimestamp()
+      });
+    });
+
+    wBal -= m.entryFee; wShown -= m.entryFee;
+    g("wallet").textContent = "₹" + wShown;
+    showSuccess(m);
+  } catch (e) {
+    err.textContent = e.message;
+    btn.disabled = false;
+    btn.textContent = "Confirm & Join · ₹" + m.entryFee;
+  }
+};
+
+function showSuccess(m) {
+  g("sheet").innerHTML = `
+    <div class="grab"></div>
+    <div class="ok">
+      <div class="tick"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></div>
+      <h2>You're in!</h2>
+      <p>You have joined <b>${esc(m.title)}</b>.<br>
+      Room ID and password will appear in My Matches before the match starts.</p>
+      <button class="join" onclick="location.href='my-matches.html'">View My Matches</button>
+      <button class="ghost" onclick="closeSheet();loadAgain()">Done</button>
+    </div>`;
+}
+window.loadAgain = () => loadMatches();
+// ============ NOTIFICATIONS (bell + popup) ============
+import * as FS from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+(function () {
+  const st = document.createElement("style");
+  st.textContent = `
+  .tbell{position:relative;width:40px;height:40px;border-radius:50%;background:#f4f4f4;
+         display:flex;align-items:center;justify-content:center;flex:none}
+  .tbell svg{width:22px;height:22px;stroke:#222;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+  .tbell i{position:absolute;top:-4px;right:-4px;min-width:18px;height:18px;border-radius:9px;
+           background:#e53935;color:#fff;font:bold 11px Arial;display:none;align-items:center;
+           justify-content:center;padding:0 4px;font-style:normal}
+  .ntoast{position:fixed;left:12px;right:12px;top:12px;z-index:99;background:#222;color:#fff;
+          border-radius:14px;padding:12px 14px;box-shadow:0 6px 20px rgba(0,0,0,.3);
+          transform:translateY(-160%);transition:transform .35s}
+  .ntoast.on{transform:translateY(0)}
+  .ntoast b{display:block;margin-bottom:2px}
+  .ntoast span{font-size:14px;color:#ddd}`;
+  document.head.appendChild(st);
+
+  const bell = document.createElement("div");
+  bell.className = "tbell";
+  bell.innerHTML = '<svg viewBox="0 0 24 24"><path d="M6 9a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6"/><path d="M10 19a2 2 0 0 0 4 0"/></svg><i></i>';
+  bell.onclick = () => { location.href = "notifications.html"; };
+  const w = document.getElementById("wallet");
+  const top = document.querySelector(".top");
+  if (w && w.parentElement && top && top.contains(w)) {
+    w.parentElement.prepend(bell);
+  } else if (top) {
+    top.style.position = "relative";
+    bell.style.cssText = "position:absolute;right:14px;top:5px";
+    top.appendChild(bell);
+  }
+
+  const toast = document.createElement("div");
+  toast.className = "ntoast";
+  toast.onclick = () => { location.href = "notifications.html"; };
+  document.body.appendChild(toast);
+  let tm = null;
+  function pop(title, body) {
+    toast.innerHTML = "<b></b><span></span>";
+    toast.querySelector("b").textContent = title;
+    toast.querySelector("span").textContent = body;
+    toast.classList.add("on");
+    if (navigator.vibrate) navigator.vibrate(200);
+    clearTimeout(tm);
+    tm = setTimeout(() => toast.classList.remove("on"), 5000);
+  }
+
+  let seen = 0, first = true;
+  auth.onAuthStateChanged(async (user) => {
+    if (!user) return;
+    try {
+      const u = await FS.getDoc(FS.doc(db, "users", user.uid));
+      seen = (u.exists() && u.data().notifSeen) || 0;
+    } catch (e) {}
+    const q = FS.query(FS.collection(db, "users", user.uid, "notifs"),
+                       FS.orderBy("createdAt", "desc"), FS.limit(30));
+    FS.onSnapshot(q, (snap) => {
+            let unread = 0;
+      seen = Math.max(seen, window.__seen || 0);
+      snap.docs.forEach(d => {
+        const c = d.data().createdAt;
+        if (c && c.toMillis() > seen) unread++;
+      });
+      const b = bell.querySelector("i");
+      b.textContent = unread > 9 ? "9+" : unread;
+      b.style.display = unread ? "flex" : "none";
+      if (!first) snap.docChanges().forEach(ch => {
+        if (ch.type === "added" && ch.doc.data().createdAt)
+          pop(ch.doc.data().title, ch.doc.data().body);
+      });
+      first = false;
+    }, () => {});
+  });
+})();
+</script>
+</body>
+</html>
