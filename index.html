@@ -3,12 +3,17 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Login</title>
+<title>TD ESP</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#ffffff">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-180.png">
 <style>
   *{box-sizing:border-box;font-family:Arial,sans-serif}
   body{margin:0;background:#fff;color:#222;display:flex;justify-content:center}
   .box{width:100%;max-width:420px;padding:28px 20px}
-  h1{color:#ff6a00;text-align:center;margin-bottom:4px}
+  .logo{display:block;width:110px;height:110px;margin:6px auto 0}
+  h1{color:#ff6a00;text-align:center;margin:8px 0 4px}
   p.sub{text-align:center;color:#888;margin-top:0}
   input{width:100%;padding:14px;margin:8px 0;border:1px solid #ddd;border-radius:12px;font-size:16px}
   input:focus{outline:none;border-color:#ff6a00}
@@ -21,6 +26,7 @@
 </head>
 <body>
 <div class="box">
+  <img class="logo" src="icon-192.png" alt="TD ESP">
   <h1>TD ESP</h1>
   <p class="sub">Free Fire MAX Tournaments</p>
 
@@ -69,10 +75,12 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
-auth.onAuthStateChanged((u) => {
-  if (u && !document.getElementById("btn").disabled) location.href = "app.html";
-});
 const g = id => document.getElementById(id);
+
+// Already logged in? Go straight to the app
+auth.onAuthStateChanged((u) => {
+  if (u && !g("btn").disabled) location.href = "app.html";
+});
 
 const ALPHA = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 const genCode = () => Array.from({ length: 6 },
@@ -124,12 +132,18 @@ g("btn").addEventListener("click", async () => {
     } else {
       await signInWithEmailAndPassword(auth, email, pass);
     }
-        location.href = "app.html";
+    location.href = "app.html";
   } catch (e) {
     msg.textContent = e.message;
     btn.disabled = false;
   }
 });
+</script>
+
+<script>
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("sw.js").catch(function () {});
+  }
 </script>
 </body>
 </html>

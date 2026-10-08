@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Help &amp; Support</title>
+<style>
+  *{box-sizing:border-box;font-family:Arial,sans-serif}
+  body{margin:0;background:#fff;color:#222}
+  .top{display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid #eee;
+       position:sticky;top:0;background:#fff;z-index:3}
+  .top b{font-size:20px;color:#ff6a00;flex:1}
+  .back{font-size:24px;padding:0 6px}
+  .new{border:none;background:#ff6a00;color:#fff;border-radius:10px;padding:9px 14px;font-size:14px;font-weight:bold}
+  .t{margin:12px 16px;padding:14px;border:1px solid #eee;border-radius:14px}
+  .t .r{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+  .tag{background:#fff3ea;color:#ff6a00;border-radius:8px;padding:3px 10px;font-size:12px;font-weight:bold}
+  .st{font-size:12px;font-weight:bold}
+  .st.open{color:#e08a00}.st.answered{color:#1c9c4b}.st.closed{color:#999}
+  .t p{margin:0 0 6px;color:#555;font-size:14px;line-height:1.5}
+  .t small{color:#999}
+  .empty{text-align:center;color:#888;margin-top:60px;line-height:1.7}
+  .form{padding:16px}
+  .form label{display:block;font-size:13px;color:#777;margin:14px 0 6px;font-weight:bold}
+  .cats{display:flex;flex-wrap:wrap;gap:8px}
+  .cats span{padding:10px 14px;border:1px solid #ddd;border-radius:20px;font-size:14px;color:#555}
+  .cats span.on{border-color:#ff6a00;background:#fff3ea;color:#ff6a00;font-weight:bold}
+  .form input,.form textarea{width:100%;padding:14px;border:1px solid #ddd;border-radius:12px;font-size:16px}
+  .form input:focus,.form textarea:focus{outline:none;border-color:#ff6a00}
+  .err{color:#d00;font-size:14px;min-height:20px;margin:8px 2px}
+  .go{width:100%;padding:15px;border:none;border-radius:12px;background:#ff6a00;color:#fff;font-size:17px;font-weight:bold}
+  .go:disabled{background:#ccc}
+  .chat{display:flex;flex-direction:column;padding:8px 0 90px}
+  .b{max-width:82%;padding:10px 12px;margin:6px 16px;border-radius:14px;font-size:15px;line-height:1.45;word-break:break-word}
+  .b small{display:block;margin-top:4px;font-size:11px;opacity:.65}
+  .b.me{align-self:flex-end;background:#ff6a00;color:#fff;border-bottom-right-radius:4px}
+  .b.ad{align-self:flex-start;background:#f1f1f1;border-bottom-left-radius:4px}
+  .closed{text-align:center;color:#999;font-size:14px;padding:10px 24px 90px}
+  .comp{position:fixed;left:0;right:0;bottom:0;display:none;gap:8px;padding:10px 12px calc(10px + env(safe-area-inset-bottom));
+        background:#fff;border-top:1px solid #eee}
+  .comp input{flex:1;padding:13px;border:1px solid #ddd;border-radius:22px;font-size:16px}
+  .comp input:focus{outline:none;border-color:#ff6a00}
+  .comp button{border:none;background:#ff6a00;color:#fff;border-radius:22px;padding:0 20px;font-size:16px;font-weight:bold}
+</style>
+</head>
+<body>
+<div class="top">
+  <div class="back" id="back">←</div>
+  <b id="title">Help &amp; Support</b>
+  <button class="new" id="newBtn">+ New</button>
+</div>
+<div id="view"></div>
+<script>
+  (function () {
+    var c = localStorage.getItem("c_tk_" + (localStorage.getItem("td_uid") || ""));
+    if (c) document.getElementById("view").innerHTML = c;
+  })();
+</script>
+<div class="comp" id="comp">
+  <input id="cIn" placeholder="Type your message..." maxlength="600">
+  <button id="cSend">Send</button>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getFirestore, doc, getDoc, collection, getDocs, addDoc, updateDoc,
+         query, where, orderBy, onSnapshot, serverTimestamp }
+  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyDkwQvjVjrEQqpEIIgWKshbz538lGm7DL8",
+  authDomain: "td-esp.firebaseapp.com",
+  projectId: "td-esp",
+  storageBucket: "td-esp.firebasestorage.app",
+  messagingSenderId: "1074367636296",
+  appId: "1:1074367636296:web:65189df5578a98cbaa097d"
+};
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+const g = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c =>
+  ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
+const fmt = ts => ts && ts.toDate ? ts.toDate().toLocaleString() : "";
+
+const CATS = ["Deposit problem", "Withdrawal problem", "Game / Match problem", "Account problem", "Other"];
+const STAT = { open: "Waiting for reply", answered: "Replied", closed: "Closed" };
+
+let me = null, meData = null, tickets = [], view = "list", picked = "", curId = "", live = [];
+
+onAuthStateChanged(auth, async (user) => {
+  if (!user) { location.href = "index.html"; return; }
+  me = user;
+  meData = (await getDoc(doc(db, "users", user.uid))).data();
+  showList();
+});
+
+function stopLive() { live.forEach(u => u()); live = []; }
+
+g("back").addEventListener("click", () => {
+  if (view === "list") location.href = "profile.html"; else showList();
+});
+g("newBtn").addEventListener("click", showNew);
+
+/* ---------- Ticket list ---------- */
+async function showList() {
+  stopLive();
+  view = "list";
+  g("title").textContent = "Help & Support";
+  g("newBtn").style.display = "block";
+  g("comp").style.display = "none";
+    g("view").innerHTML = localStorage.getItem("c_tk_" + me.uid) || '<div class="empty">Loading...</div>';
+  try {
+    const s = await getDocs(query(collection(db, "tickets"), where("uid", "==", me.uid)));
+    tickets = s.docs.map(d => ({ id: d.id, ...d.data() }))
+      .sort((a, b) => (b.updatedAt?.seconds || 0) - (a.updatedAt?.seconds || 0));
+    g("view").innerHTML = tickets.length ? tickets.map(t => `
+      <div class="t" onclick="openT('${t.id}')">
+        <div class="r"><span class="tag">${esc(t.category)}</span>
+          <span class="st ${esc(t.status)}">${STAT[t.status] || esc(t.status)}</span></div>
+        <p>${esc(t.last || "")}</p><small>${fmt(t.updatedAt)}</small>
+      </div>`).join("")
+            : '<div class="empty">No tickets yet.<br>Tap "+ New" if you need help.</div>';
+    try { localStorage.setItem("c_tk_" + me.uid, g("view").innerHTML); } catch (e) {}
+  } catch (e) {
+    g("view").innerHTML = '<div class="empty" style="color:#d00">Error: ' + esc(e.message) + '</div>';
+  }
+}
+window.openT = (id) => showThread(id);
+
+/* ---------- New ticket ---------- */
+function showNew() {
+  stopLive();
+  view = "new"; picked = "";
+  g("title").textContent = "New Ticket";
+  g("newBtn").style.display = "none";
+  g("comp").style.display = "none";
+  g("view").innerHTML = `
+    <div class="form">
+      <label>What is your problem about?</label>
+      <div class="cats">${CATS.map(c => `<span data-c="${c}">${c}</span>`).join("")}</div>
+      <label>UTR / Match name (optional)</label>
+      <input id="nRef" placeholder="e.g. UTR of your payment or match title">
+      <label>Describe your problem</label>
+      <textarea id="nMsg" rows="5" maxlength="600" placeholder="Write the details here..."></textarea>
+      <div class="err" id="nErr"></div>
+      <button class="go" id="nGo">Submit</button>
+    </div>`;
+  document.querySelectorAll(".cats span").forEach(sp => sp.addEventListener("click", () => {
+    document.querySelectorAll(".cats span").forEach(x => x.classList.remove("on"));
+    sp.classList.add("on");
+    picked = sp.dataset.c;
+  }));
+  g("nGo").addEventListener("click", createTicket);
+}
+
+async function createTicket() {
+  const msg = g("nMsg").value.trim(), ref = g("nRef").value.trim(), err = g("nErr");
+  err.textContent = "";
+  if (!picked) { err.textContent = "Please choose a category"; return; }
+  if (msg.length < 10) { err.textContent = "Please describe your problem (at least 10 characters)"; return; }
+  if (tickets.filter(t => t.status !== "closed").length >= 3) {
+    err.textContent = "You already have 3 active tickets. Please continue those or wait for a reply.";
+    return;
+  }
+  const btn = g("nGo");
+  btn.disabled = true; btn.textContent = "Submitting...";
+  try {
+    const text = ref ? msg + "\n\nReference: " + ref : msg;
+    const tRef = await addDoc(collection(db, "tickets"), {
+      uid: me.uid, username: meData.username, category: picked, ref,
+      last: text.slice(0, 80), lastFrom: "user", status: "open",
+      createdAt: serverTimestamp(), updatedAt: serverTimestamp()
+    });
+    await addDoc(collection(db, "tickets", tRef.id, "msgs"),
+      { from: "user", text, createdAt: serverTimestamp() });
+    showThread(tRef.id);
+  } catch (e) {
+    err.textContent = e.message;
+    btn.disabled = false; btn.textContent = "Submit";
+  }
+}
+
+/* ---------- Chat ---------- */
+function showThread(id) {
+  stopLive();
+  view = "thread"; curId = id;
+  g("newBtn").style.display = "none";
+  g("view").innerHTML = '<div class="chat" id="chat"></div><div id="cl"></div>';
+
+  const u1 = onSnapshot(doc(db, "tickets", id), (s) => {
+    if (!s.exists()) return;
+    const t = s.data();
+    g("title").textContent = t.category;
+    const closed = t.status === "closed";
+    g("comp").style.display = closed ? "none" : "flex";
+    g("cl").innerHTML = closed
+      ? '<div class="closed">This ticket is closed. If you still need help, please create a new ticket.</div>' : "";
+  });
+  const u2 = onSnapshot(
+    query(collection(db, "tickets", id, "msgs"), orderBy("createdAt", "asc")),
+    (s) => {
+      g("chat").innerHTML = s.docs.map(d => {
+        const m = d.data();
+        return `<div class="b ${m.from === "user" ? "me" : "ad"}">${esc(m.text).replace(/\n/g, "<br>")}
+          <small>${m.from === "admin" ? "Support • " : ""}${fmt(m.createdAt)}</small></div>`;
+      }).join("");
+      window.scrollTo(0, document.body.scrollHeight);
+    });
+  live = [u1, u2];
+}
+
+async function send() {
+  const text = g("cIn").value.trim();
+  if (!text) return;
+  g("cIn").value = "";
+  try {
+    await addDoc(collection(db, "tickets", curId, "msgs"),
+      { from: "user", text, createdAt: serverTimestamp() });
+    await updateDoc(doc(db, "tickets", curId), {
+      status: "open", lastFrom: "user", last: text.slice(0, 80), updatedAt: serverTimestamp()
+    });
+  } catch (e) { alert(e.message); }
+}
+g("cSend").addEventListener("click", send);
+g("cIn").addEventListener("keydown", (e) => { if (e.key === "Enter") send(); });
+</script>
+</body>
+</html>
