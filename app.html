@@ -191,6 +191,86 @@ onAuthStateChanged(auth, (user) => {
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("sw.js").catch(function () {});
   }
+
+// ============ PUSH NOTIFICATIONS ============
+import { getApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getMessaging, getToken, onMessage, isSupported }
+  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging.js";
+import { getFirestore, doc, updateDoc }
+  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+const VAPID_KEY = "PASTE_VAPID_KEY";
+
+(async function () {
+  try {
+    if (!("serviceWorker" in navigator) || !("Notification" in window)) return;
+    if (!(await isSupported())) return;
+  } catch (e) { return; }
+
+  const db = getFirestore(getApp());
+  const messaging = getMessaging(getApp());
+  let uid = null;
+
+  async function saveToken() {
+    try {
+      const reg = await navigator.serviceWorker.register("sw.js");
+      await navigator.serviceWorker.ready;
+      const token = await getToken(messaging, { vapidKey: VAPID_KEY, serviceWorkerRegistration: reg });
+      if (token && uid) await updateDoc(doc(db, "users", uid), { fcmToken: token });
+    } catch (e) { console.log("push:", e); }
+  }
+
+  function toast(title, body) {
+    const t = document.createElement("div");
+    t.style.cssText = "position:fixed;left:12px;right:12px;top:12px;z-index:60;background:#222;color:#fff;" +
+      "border-radius:14px;padding:12px 14px;box-shadow:0 6px 20px rgba(0,0,0,.3);font-size:14px";
+    t.innerHTML = "<b style='display:block;margin-bottom:2px'></b><span></span>";
+    t.querySelector("b").textContent = title;
+    t.querySelector("span").textContent = body;
+    document.body.appendChild(t);
+    setTimeout(() => t.remove(), 5000);
+  }
+
+  function banner() {
+    const b = document.createElement("div");
+    b.style.cssText = "position:fixed;left:12px;right:12px;bottom:calc(80px + env(safe-area-inset-bottom));" +
+      "z-index:40;background:#222;color:#fff;border-radius:16px;padding:14px;" +
+      "box-shadow:0 8px 24px rgba(0,0,0,.35);font-size:14px;line-height:1.5";
+    b.innerHTML = "<b style='display:block;margin-bottom:4px;font-size:15px'>Turn on notifications</b>" +
+      "Get match, payment and offer alerts on your phone." +
+      "<div style='display:flex;gap:8px;margin-top:10px'>" +
+      "<button id='pnYes' style='flex:1;padding:11px;border:none;border-radius:10px;background:#ff6a00;color:#fff;font-size:15px;font-weight:bold'>Enable</button>" +
+      "<button id='pnNo' style='flex:1;padding:11px;border:1px solid #666;border-radius:10px;background:none;color:#ddd;font-size:15px'>Later</button></div>";
+    document.body.appendChild(b);
+    b.querySelector("#pnYes").onclick = async () => {
+      b.remove();
+      try {
+        const p = await Notification.requestPermission();
+        if (p === "granted") saveToken();
+      } catch (e) {}
+    };
+    b.querySelector("#pnNo").onclick = () => {
+      try { localStorage.setItem("td_push_later", String(Date.now())); } catch (e) {}
+      b.remove();
+    };
+  }
+
+  onMessage(messaging, (payload) => {
+    const n = payload.notification || {};
+    toast(n.title || "TD ESP", n.body || "");
+  });
+
+  auth.onAuthStateChanged((user) => {
+    if (!user) return;
+    uid = user.uid;
+    if (Notification.permission === "granted") { saveToken(); return; }
+    if (Notification.permission === "default") {
+      let later = 0;
+      try { later = Number(localStorage.getItem("td_push_later") || 0); } catch (e) {}
+      if (Date.now() - later > 3 * 24 * 3600 * 1000) setTimeout(banner, 6000);
+    }
+  });
+})();
 </script>
 
 </body>
