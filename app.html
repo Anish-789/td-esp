@@ -4,6 +4,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>TD ESP</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#ffffff">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-180.png">
 <style>
   *{box-sizing:border-box;font-family:Arial,sans-serif}
   html,body{margin:0;height:100%;background:#fff;overflow:hidden}
@@ -182,5 +186,12 @@ onAuthStateChanged(auth, (user) => {
   setTimeout(() => { g("boot").style.display = "none"; }, 8000);
 });
 </script>
+
+<script>
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("sw.js").catch(function () {});
+  }
+</script>
+
 </body>
 </html>
