@@ -51,6 +51,9 @@
   <label>Free Fire UID</label>
   <input id="ffuid" inputmode="numeric">
   <button class="save" id="save">Save</button>
+    
+      <button class="alt" id="pushBtn">Notifications</button>
+    
     <button class="alt" onclick="location.href='support.html'">Help &amp; Support</button>
   <button class="out" id="out">Logout</button>
 </div>
@@ -193,6 +196,32 @@ import * as FS from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firesto
     }, () => {});
   });
 })();
+
+(function () {
+  const b = document.getElementById("pushBtn");
+  const P = () => { try { return parent.tdPush; } catch (e) { return null; } };
+  function label() {
+    const p = P();
+    if (!p) { b.textContent = "Notifications: not available here"; return; }
+    const s = p.status();
+    b.textContent = s === "granted" ? "Notifications: ON ✅"
+      : s === "denied" ? "Notifications: blocked" : "Enable notifications";
+  }
+  b.addEventListener("click", async () => {
+    const p = P();
+    if (!p) { alert("Notifications are not available here"); return; }
+    const s = p.status();
+    if (s === "denied") {
+      alert("Notifications are blocked. Open phone Settings > Apps > TD ESP > Notifications and turn them ON.");
+      return;
+    }
+    if (s === "granted") { await p.enable(); alert("Notifications are already ON"); return; }
+    await p.enable();
+    label();
+  });
+  setTimeout(label, 1500);
+})();
+
 </script>
 </body>
 </html>
