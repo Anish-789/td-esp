@@ -17,12 +17,21 @@
   .st{background:#fff3ea;border-radius:14px;padding:14px;text-align:center}
   .st b{display:block;font-size:22px;color:#ff6a00}
   .st span{font-size:13px;color:#666}
+  .ref{margin:0 16px 16px;border:1px solid #ffd9bd;border-radius:16px;padding:16px;text-align:center;background:#fffaf6}
+  .ref .rt{font-weight:bold;font-size:18px;color:#ff6a00}
+  .ref p{color:#666;font-size:14px;line-height:1.5;margin:8px 0}
+  .ref .code{font-size:30px;letter-spacing:6px;font-weight:bold;margin:10px 0;color:#222}
+  .ref .rb{display:flex;gap:8px}
+  .ref .rb button{flex:1;margin:0;padding:12px;font-size:15px}
+  .ref .rs{display:flex;justify-content:space-around;margin-top:12px;font-size:13px;color:#777}
+  .ref .rs b{color:#ff6a00;font-size:16px}
   .form{padding:0 16px}
   label{font-size:13px;color:#888}
   input{width:100%;padding:14px;margin:6px 0 12px;border:1px solid #ddd;border-radius:12px;font-size:16px}
   button{width:100%;padding:14px;border:none;border-radius:12px;font-size:17px;margin-top:6px}
   .save{background:#ff6a00;color:#fff}
   .out{background:#fff;color:#d00;border:1px solid #d00}
+  .alt{background:#fff;color:#ff6a00;border:1px solid #ff6a00}
   .nav{position:fixed;bottom:0;left:0;right:0;display:flex;background:#fff;border-top:1px solid #eee;padding-bottom:env(safe-area-inset-bottom)}
   .nav div{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px 0 12px;font-size:13px;font-weight:bold;color:#999}
   .nav svg{width:28px;height:28px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
@@ -45,16 +54,23 @@
   <div class="st"><b id="sBon">₹0</b><span>Bonus</span></div>
 </div>
 
+<div class="ref">
+  <div class="rt">Refer &amp; Earn</div>
+  <p id="refInfo">Invite your friends to join!</p>
+  <div class="code" id="refCode">------</div>
+  <div class="rb">
+    <button class="alt" id="cpy">Copy Code</button>
+    <button class="save" id="shr">Share</button>
+  </div>
+  <div class="rs"><span><b id="rCnt">0</b> friends joined</span><span><b id="rPaid">0</b> rewarded</span></div>
+</div>
+
 <div class="form">
   <label>Username</label>
   <input id="username">
   <label>Free Fire UID</label>
   <input id="ffuid" inputmode="numeric">
   <button class="save" id="save">Save</button>
-    
-      <button class="alt" id="pushBtn">Notifications</button>
-    
-    <button class="alt" onclick="location.href='support.html'">Help &amp; Support</button>
   <button class="out" id="out">Logout</button>
 </div>
 
@@ -73,7 +89,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getAuth, onAuthStateChanged, signOut }
   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import { getFirestore, doc, getDoc, updateDoc }
+import { getFirestore, doc, getDoc, setDoc, updateDoc, collection, getDocs, query, where }
   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -88,7 +104,18 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 const g = id => document.getElementById(id);
-let me = null;
+let me = null, myCode = "", appName = "TD ESP";
+
+const ALPHA = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+const genCode = () => Array.from({ length: 6 },
+  () => ALPHA[Math.floor(Math.random() * ALPHA.length)]).join("");
+async function claimCode(uid) {
+  for (let i = 0; i < 5; i++) {
+    const code = genCode();
+    try { await setDoc(doc(db, "refCodes", code), { uid }); return code; } catch (e) {}
+  }
+  return "";
+}
 
 onAuthStateChanged(auth, async (user) => {
   if (!user) { location.href = "index.html"; return; }
@@ -103,15 +130,58 @@ onAuthStateChanged(auth, async (user) => {
   g("sBon").textContent = "₹" + (u.bonus || 0);
   g("username").value = u.username || "";
   g("ffuid").value = u.ffuid || "";
+
+  myCode = u.refCode || "";
+  if (!myCode) {
+    myCode = await claimCode(user.uid);
+    if (myCode) { try { await updateDoc(doc(db, "users", user.uid), { refCode: myCode }); } catch (e) {} }
+  }
+  g("refCode").textContent = myCode || "------";
+
+  try {
+    const s = await getDoc(doc(db, "settings", "app"));
+    if (s.exists()) {
+      const d = s.data();
+      if (d.name) appName = d.name;
+      if (d.refBonus || d.refBonusNew) {
+        g("refInfo").textContent = "Friend signs up with your code and their first deposit (₹50+) is approved: you get ₹"
+          + (d.refBonus || 0) + " and they get ₹" + (d.refBonusNew || 0) + " in the deposit wallet.";
+      }
+    }
+  } catch (e) {}
+
+  try {
+    const rs = await getDocs(query(collection(db, "referrals"), where("referrer", "==", user.uid)));
+    g("rCnt").textContent = rs.size;
+    g("rPaid").textContent = rs.docs.filter(d => d.data().status === "paid").length;
+  } catch (e) {}
+});
+
+g("cpy").addEventListener("click", () => {
+  if (!myCode) return;
+  navigator.clipboard.writeText(myCode);
+  alert("Referral code copied");
+});
+
+g("shr").addEventListener("click", async () => {
+  if (!myCode) return;
+  const link = new URL("index.html", location.href).href;
+  const text = "Join me on " + appName + " and play Free Fire tournaments! Use my referral code " + myCode + " when you sign up.\n" + link;
+  if (navigator.share) {
+    try { await navigator.share({ title: appName, text }); } catch (e) {}
+  } else {
+    navigator.clipboard.writeText(text);
+    alert("Invite message copied");
+  }
 });
 
 g("save").addEventListener("click", async () => {
   const username = g("username").value.trim();
   const ffuid = g("ffuid").value.trim();
-  if (!username || !ffuid) { alert("Dono likho"); return; }
+  if (!username || !ffuid) { alert("Please fill in both fields"); return; }
   try {
     await updateDoc(doc(db, "users", me.uid), { username, ffuid });
-    alert("Save ho gaya ✅");
+    alert("Saved ✅");
     location.reload();
   } catch (e) { alert(e.message); }
 });
@@ -179,7 +249,7 @@ import * as FS from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firesto
     const q = FS.query(FS.collection(db, "users", user.uid, "notifs"),
                        FS.orderBy("createdAt", "desc"), FS.limit(30));
     FS.onSnapshot(q, (snap) => {
-        let unread = 0;
+      let unread = 0;
       seen = Math.max(seen, window.__seen || 0);
       snap.docs.forEach(d => {
         const c = d.data().createdAt;
@@ -196,32 +266,6 @@ import * as FS from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firesto
     }, () => {});
   });
 })();
-
-(function () {
-  const b = document.getElementById("pushBtn");
-  const P = () => { try { return parent.tdPush; } catch (e) { return null; } };
-  function label() {
-    const p = P();
-    if (!p) { b.textContent = "Notifications: not available here"; return; }
-    const s = p.status();
-    b.textContent = s === "granted" ? "Notifications: ON ✅"
-      : s === "denied" ? "Notifications: blocked" : "Enable notifications";
-  }
-  b.addEventListener("click", async () => {
-    const p = P();
-    if (!p) { alert("Notifications are not available here"); return; }
-    const s = p.status();
-    if (s === "denied") {
-      alert("Notifications are blocked. Open phone Settings > Apps > TD ESP > Notifications and turn them ON.");
-      return;
-    }
-    if (s === "granted") { await p.enable(); alert("Notifications are already ON"); return; }
-    await p.enable();
-    label();
-  });
-  setTimeout(label, 1500);
-})();
-
 </script>
 </body>
 </html>

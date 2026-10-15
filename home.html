@@ -119,6 +119,11 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 const g = id => document.getElementById(id);
+const fmtDT = (ms) => {
+  const d = new Date(ms), p = n => String(n).padStart(2, "0");
+  let h = d.getHours(); const ap = h >= 12 ? "PM" : "AM"; h = h % 12 || 12;
+  return p(d.getDate()) + "/" + p(d.getMonth() + 1) + "/" + d.getFullYear() + ", " + p(h) + ":" + p(d.getMinutes()) + " " + ap;
+};
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c =>
   ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
 const imgOr = (src, name) => src

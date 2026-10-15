@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Users (Admin)</title>
+<style>
+  *{box-sizing:border-box;font-family:Arial,sans-serif}
+  body{margin:0;background:#fff;color:#222;padding-bottom:40px}
+  .top{display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid #eee}
+  .top b{font-size:20px;color:#ff6a00}
+  .back{font-size:24px;padding:0 6px}
+  .wrap{padding:14px 16px}
+  .stats{display:flex;gap:8px;margin-bottom:10px}
+  .s{flex:1;background:#fff3ea;border-radius:12px;padding:10px;text-align:center;font-size:12px}
+  .s b{display:block;font-size:20px;color:#ff6a00}
+  .card{border:1px solid #eee;border-radius:14px;padding:12px;margin-bottom:12px;font-size:14px;line-height:1.7}
+  .card small{color:#888}
+  .chip{display:inline-block;padding:2px 10px;border-radius:10px;font-size:12px;font-weight:bold;margin-left:6px}
+  .chip.ok{background:#eaf8ee;color:#1c9c4b}
+  .chip.bad{background:#ffe8e8;color:#e53935}
+  .btns{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+  .btns button{flex:1;padding:11px;border:1px solid #ff6a00;background:#fff;color:#ff6a00;border-radius:10px;font-size:14px}
+  .btns button.red{border-color:#d00;color:#d00}
+  .btns button.ok{background:#ff6a00;color:#fff}
+  input,select{width:100%;padding:12px;margin:5px 0;border:1px solid #ddd;border-radius:12px;font-size:15px}
+  h4{margin:16px 0 4px}
+  #msg{padding:40px 16px;text-align:center;color:#d00}
+</style>
+</head>
+<body>
+<div class="top">
+  <div class="back" onclick="location.href='admin.html'">←</div>
+  <b>Users</b>
+</div>
+<div id="msg">Loading...</div>
+<div class="wrap" id="box" style="display:none"></div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getFirestore, doc, getDoc, collection, getDocs, addDoc, updateDoc,
+         runTransaction, serverTimestamp }
+  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyDkwQvjVjrEQqpEIIgWKshbz538lGm7DL8",
+  authDomain: "td-esp.firebaseapp.com",
+  projectId: "td-esp",
+  storageBucket: "td-esp.firebasestorage.app",
+  messagingSenderId: "1074367636296",
+  appId: "1:1074367636296:web:65189df5578a98cbaa097d"
+};
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+const g = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c =>
+  ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
+const fmtDT = (ms) => {
+  const d = new Date(ms), p = n => String(n).padStart(2, "0");
+  let h = d.getHours(); const ap = h >= 12 ? "PM" : "AM"; h = h % 12 || 12;
+  return p(d.getDate()) + "/" + p(d.getMonth() + 1) + "/" + d.getFullYear() + ", " + p(h) + ":" + p(d.getMinutes()) + " " + ap;
+};
+
+let users = [], flt = "all", qs = "", cur = null;
+
+async function notify(uid, title, body) {
+  try {
+    await addDoc(collection(db, "users", uid, "notifs"),
+      { title, body, createdAt: serverTimestamp() });
+  } catch (e) {}
+}
+
+onAuthStateChanged(auth, async (user) => {
+  if (!user) { location.href = "index.html"; return; }
+  const u = (await getDoc(doc(db, "users", user.uid))).data();
+  if (!u || u.role !== "admin") { g("msg").textContent = "Access denied (admin only)"; return; }
+  g("msg").style.display = "none";
+  g("box").style.display = "block";
+  load();
+});
+
+async function load() {
+  try {
+    const s = await getDocs(collection(db, "users"));
+    users = s.docs.map(d => ({ id: d.id, ...d.data() }))
+      .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+    showList();
+  } catch (e) { g("box").innerHTML = '<p style="color:#d00">Error: ' + esc(e.message) + '</p>'; }
+}
+
+function showList() {
+  cur = null;
+  const banned = users.filter(u => u.banned).length;
+  g("box").innerHTML = `
+    <div class="stats">
+      <div class="s"><b>${users.length}</b>Total users</div>
+      <div class="s"><b>${banned}</b>Banned</div>
+    </div>
+    <input id="q" placeholder="Search by username, email or Free Fire UID" value="${esc(qs)}">
+    <select id="f">
+      <option value="all">All users</option>
+      <option value="banned">Banned only</option>
+    </select>
+    <div id="ul"></div>`;
+  g("f").value = flt;
+  g("q").oninput = () => { qs = g("q").value.trim(); drawList(); };
+  g("f").onchange = () => { flt = g("f").value; drawList(); };
+  drawList();
+}
+
+function drawList() {
+  const q = qs.toLowerCase();
+  const items = users.filter(u =>
+    (flt === "all" || u.banned) &&
+    (!q || [u.username, u.email, u.ffuid, u.refCode].some(v => String(v || "").toLowerCase().includes(q))));
+  g("ul").innerHTML = items.length ? items.slice(0, 100).map(u => `
+    <div class="card">
+      <b>${esc(u.username)}</b>
+      <span class="chip ${u.banned ? "bad" : "ok"}">${u.banned ? "Banned" : "Active"}</span><br>
+      <small>${esc(u.email)} • FF UID ${esc(u.ffuid)}</small><br>
+      Deposit ₹${u.deposit || 0} | Winning ₹${u.winning || 0}
+      <div class="btns"><button class="ok" onclick="openU('${u.id}')">Open</button></div>
+    </div>`).join("") + (items.length > 100 ? "<p><small>Showing first 100. Use search to narrow down.</small></p>" : "")
+    : "<p>No users found.</p>";
+}
+
+window.openU = (id) => {
+  cur = users.find(x => x.id === id);
+  const u = cur;
+  const isAdm = u.role === "admin";
+  g("box").innerHTML = `
+    <div class="btns" style="margin:0 0 10px"><button onclick="showList()">← Back</button></div>
+    <div class="card">
+      <b>${esc(u.username)}</b>
+      <span class="chip ${u.banned ? "bad" : "ok"}">${u.banned ? "Banned" : "Active"}</span><br>
+      ${esc(u.email)}<br>
+      Free Fire UID: ${esc(u.ffuid)}<br>
+      Joined: ${u.createdAt && u.createdAt.toMillis ? fmtDT(u.createdAt.toMillis()) : "-"}<br>
+      Deposit ₹${u.deposit || 0} | Winning ₹${u.winning || 0} | Bonus ₹${u.bonus || 0}<br>
+      Kills ${u.kills || 0} | Booyahs ${u.booyahs || 0} | Total winnings ₹${u.totalWinnings || 0}
+      ${u.banned && u.banReason ? "<br>Ban reason: " + esc(u.banReason) : ""}
+    </div>
+
+    <h4>Balance</h4>
+    <select id="w">
+      <option value="deposit">Deposit wallet</option>
+      <option value="winning">Winning wallet</option>
+    </select>
+    <input id="amt" type="number" inputmode="numeric" placeholder="Amount (₹)">
+    <input id="note" placeholder="Note (optional)">
+    <div class="btns">
+      <button class="ok" onclick="adj(1)">Add</button>
+      <button class="red" onclick="adj(-1)">Deduct</button>
+    </div>
+
+    <h4>Account</h4>
+    ${isAdm ? "<p><small>This is an admin account. It cannot be banned here.</small></p>"
+      : u.banned
+        ? '<div class="btns"><button class="ok" onclick="unban()">Unban user</button></div>'
+        : `<input id="reason" placeholder="Ban reason (optional)">
+           <div class="btns"><button class="red" onclick="ban()">Ban user</button></div>`}`;
+};
+window.showList = showList;
+
+window.adj = async (sign) => {
+  const amt = Math.floor(Number(g("amt").value));
+  if (!amt || amt <= 0) { alert("Enter a valid amount"); return; }
+  const w = g("w").value, note = g("note").value.trim();
+  const tk = cur;
+  const word = sign > 0 ? "Add" : "Deduct";
+  if (!confirm(word + " ₹" + amt + (sign > 0 ? " to " : " from ") + tk.username + "'s " + w + " wallet?")) return;
+  try {
+    await runTransaction(db, async (tx) => {
+      const ref = doc(db, "users", tk.id);
+      const u = (await tx.get(ref)).data();
+      const nv = (u[w] || 0) + sign * amt;
+      if (nv < 0) throw new Error("Balance cannot go below ₹0");
+      tx.update(ref, { [w]: nv });
+      tx.set(doc(collection(db, "transactions")), {
+        uid: tk.id, type: "admin", amount: sign * amt,
+        note: (sign > 0 ? "Added by admin" : "Deducted by admin") + (note ? ": " + note : ""),
+        createdAt: serverTimestamp()
+      });
+    });
+    await notify(tk.id,
+      sign > 0 ? "Balance added" : "Balance deducted",
+      sign > 0 ? "₹" + amt + " was added to your " + w + " wallet by admin." + (note ? " (" + note + ")" : "")
+               : "₹" + amt + " was deducted from your " + w + " wallet by admin." + (note ? " (" + note + ")" : ""));
+    await load();
+    window.openU(tk.id);
+    alert("Done ✅");
+  } catch (e) { alert(e.message); }
+};
+
+window.ban = async () => {
+  const tk = cur;
+  const reason = (g("reason").value || "").trim();
+  if (!confirm("Ban " + tk.username + "?")) return;
+  try {
+    await updateDoc(doc(db, "users", tk.id),
+      { banned: true, banReason: reason, bannedAt: serverTimestamp() });
+    await load();
+    window.openU(tk.id);
+  } catch (e) { alert(e.message); }
+};
+
+window.unban = async () => {
+  const tk = cur;
+  if (!confirm("Unban " + tk.username + "?")) return;
+  try {
+    await updateDoc(doc(db, "users", tk.id), { banned: false, banReason: "" });
+    await notify(tk.id, "Account unbanned", "Your account is active again. You can play and use your wallet.");
+    await load();
+    window.openU(tk.id);
+  } catch (e) { alert(e.message); }
+};
+</script>
+</body>
+</html>
