@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>TD ESP</title>
 <link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#ffffff">
+<meta name="theme-color" content="#ff6a00">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-180.png">
 <style>
@@ -22,10 +22,16 @@
        display:flex;background:#fff;border-top:1px solid #eee;
        padding-bottom:env(safe-area-inset-bottom);z-index:5}
   .nav div{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
-           gap:4px;font-size:13px;font-weight:bold;color:#999}
-  .nav svg{width:28px;height:28px;stroke:currentColor;fill:none;stroke-width:1.8;
+           gap:3px;font-size:11px;font-weight:bold;color:#999;white-space:nowrap}
+  .nav svg{width:25px;height:25px;stroke:currentColor;fill:none;stroke-width:1.8;
            stroke-linecap:round;stroke-linejoin:round}
   .nav .on{color:#ff6a00}
+  #fab{position:fixed;right:16px;bottom:calc(68px + 16px + env(safe-area-inset-bottom));
+       width:54px;height:54px;border-radius:50%;background:#ff6a00;
+       display:flex;align-items:center;justify-content:center;
+       box-shadow:0 6px 18px rgba(255,106,0,.45);z-index:12}
+  #fab svg{width:28px;height:28px;stroke:#fff;fill:none;stroke-width:1.9;
+           stroke-linecap:round;stroke-linejoin:round}
   #boot{position:fixed;inset:0;background:#fff;display:flex;align-items:center;justify-content:center;
         color:#ff6a00;font-weight:bold;font-size:22px;z-index:30}
 </style>
@@ -37,6 +43,8 @@
 <div class="nav" id="nav">
   <div data-tab="home" class="on">
     <svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h5v-6h4v6h5V10"/></svg>Home</div>
+  <div data-tab="my-matches">
+    <svg viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="11" rx="5"/><path d="M7 10.5v4M5 12.5h4"/><path d="M16 11.5h.01M18.5 13.5h.01"/></svg>My Matches</div>
   <div data-tab="wallet">
     <svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="14" rx="3"/><path d="M3 10h18"/><circle cx="16.5" cy="15" r="1.2"/></svg>Wallet</div>
   <div data-tab="leaderboard">
@@ -45,11 +53,19 @@
     <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg>Profile</div>
 </div>
 
+<div id="fab" aria-label="Help and Support">
+  <svg viewBox="0 0 24 24"><path d="M4 14v-2a8 8 0 0 1 16 0v2"/><rect x="3" y="14" width="4" height="6" rx="2"/><rect x="17" y="14" width="4" height="6" rx="2"/><path d="M19 20c0 1.5-1.5 2-4 2h-2"/></svg>
+</div>
+
 <iframe id="ov"></iframe>
 
 <script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { initializeApp, getApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getMessaging, getToken, onMessage, isSupported }
+  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging.js";
+import { getFirestore, doc, updateDoc }
+  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDkwQvjVjrEQqpEIIgWKshbz538lGm7DL8",
@@ -59,13 +75,20 @@ const firebaseConfig = {
   messagingSenderId: "1074367636296",
   appId: "1:1074367636296:web:65189df5578a98cbaa097d"
 };
-const auth = getAuth(initializeApp(firebaseConfig));
+
+// Firebase > Project settings > Cloud Messaging > Web Push certificates > Key pair
+const VAPID_KEY = "BPi6TBuf1WQRpCx09gS047Vc9Rz96aXWIPYQckxA4IwO5MtJ2hvxrak6biNF9ql2iWMc9Z2canxBfXFrq_jmClE";
+
+const fbApp = initializeApp(firebaseConfig);
+const auth = getAuth(fbApp);
+const db = getFirestore(fbApp);
 const g = id => document.getElementById(id);
 
-const TABS = ["home", "wallet", "leaderboard", "profile"];
+const TABS = ["home", "my-matches", "wallet", "leaderboard", "profile"];
 const fr = {};
 const ov = g("ov");
-let allowNav = false, started = false, preloaded = false, current = "home", ovFile = "";
+let allowNav = false, started = false, preloaded = false;
+let current = "home", ovFile = "", uid = "";
 
 TABS.forEach(t => {
   const f = document.createElement("iframe");
@@ -96,6 +119,8 @@ function openTab(name, fromNav) {
     try { f.contentWindow.scrollTo({ top: 0, behavior: "smooth" }); } catch (e) {}
   } else if (!f.getAttribute("src") || (here && here !== "blank" && here !== want)) {
     setSrc(f, want);
+  } else if (name !== current) {
+    try { if (f.contentWindow.refresh) f.contentWindow.refresh(); } catch (e) {}
   }
   TABS.forEach(t => fr[t].classList.toggle("on", t === name));
   document.querySelectorAll("#nav div").forEach(d =>
@@ -105,7 +130,7 @@ function openTab(name, fromNav) {
 document.querySelectorAll("#nav div").forEach(d =>
   d.addEventListener("click", () => { closeOverlay(); openTab(d.dataset.tab, true); }));
 
-/* ---------- Upar wali layer (Notifications, My Matches, Help, Pay) ---------- */
+/* ---------- Upar wali layer (Notifications, Help, Pay) ---------- */
 function openOverlay(url) {
   allow();
   ov.src = url;
@@ -119,7 +144,7 @@ function closeOverlay() {
   ov.src = "about:blank";
   ovFile = "";
 
-  if (from === "notifications.html") {          // bell ki ginti hata do
+  if (from === "notifications.html") {
     TABS.forEach(t => {
       try {
         const w2 = fr[t].contentWindow;
@@ -128,8 +153,9 @@ function closeOverlay() {
       } catch (e) {}
     });
   }
-  if (from === "pay.html") setSrc(fr[current], current + ".html");   // wallet refresh
+  if (from === "pay.html") setSrc(fr[current], current + ".html");
 }
+g("fab").addEventListener("click", () => openOverlay("support.html"));
 
 /* ---------- Har page load hone par ---------- */
 function hook(f) {
@@ -159,7 +185,8 @@ function hook(f) {
           location.href = "index.html";
         } else if (TABS.includes(tab)) {
           e.preventDefault();
-          if (isOv) closeOverlay(); else openTab(tab);
+          if (isOv) closeOverlay();
+          openTab(tab);
         } else if (!isOv && /\.html$/.test(file)) {
           e.preventDefault();
           openOverlay(file + u.search);
@@ -171,19 +198,136 @@ function hook(f) {
   if (f === fr.home && !preloaded) {
     preloaded = true;
     g("boot").style.display = "none";
-    ["wallet", "leaderboard", "profile"].forEach((t, i) => {
+    ["my-matches", "wallet", "leaderboard", "profile"].forEach((t, i) => {
       setTimeout(() => { if (!fr[t].getAttribute("src")) setSrc(fr[t], t + ".html"); }, 800 * (i + 1));
     });
   }
 }
 
+/* ---------- Push notifications ---------- */
+let messaging = null;
+
+function toast(title, body) {
+  const t = document.createElement("div");
+  t.style.cssText = "position:fixed;left:12px;right:12px;top:12px;z-index:60;background:#222;color:#fff;" +
+    "border-radius:14px;padding:12px 14px;box-shadow:0 6px 20px rgba(0,0,0,.3);font-size:14px";
+  t.innerHTML = "<b style='display:block;margin-bottom:2px'></b><span></span>";
+  t.querySelector("b").textContent = title;
+  t.querySelector("span").textContent = body;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 5000);
+}
+
+async function saveToken() {
+  if (!messaging || !uid) return;
+  if (!VAPID_KEY || VAPID_KEY === "PASTE_VAPID_KEY") { console.log("push: VAPID key missing"); return; }
+  try {
+    const reg = await navigator.serviceWorker.register("sw.js");
+    await navigator.serviceWorker.ready;
+    const token = await getToken(messaging, { vapidKey: VAPID_KEY, serviceWorkerRegistration: reg });
+    if (token) await updateDoc(doc(db, "users", uid), { fcmToken: token });
+  } catch (e) { console.log("push:", e); }
+}
+
+function banner() {
+  const b = document.createElement("div");
+  b.style.cssText = "position:fixed;left:12px;right:12px;bottom:calc(150px + env(safe-area-inset-bottom));" +
+    "z-index:40;background:#222;color:#fff;border-radius:16px;padding:14px;" +
+    "box-shadow:0 8px 24px rgba(0,0,0,.35);font-size:14px;line-height:1.5";
+  b.innerHTML = "<b style='display:block;margin-bottom:4px;font-size:15px'>Turn on notifications</b>" +
+    "Get match, payment and offer alerts on your phone." +
+    "<div style='display:flex;gap:8px;margin-top:10px'>" +
+    "<button id='pnYes' style='flex:1;padding:11px;border:none;border-radius:10px;background:#ff6a00;color:#fff;font-size:15px;font-weight:bold'>Enable</button>" +
+    "<button id='pnNo' style='flex:1;padding:11px;border:1px solid #666;border-radius:10px;background:none;color:#ddd;font-size:15px'>Later</button></div>";
+  document.body.appendChild(b);
+  b.querySelector("#pnYes").onclick = async () => {
+    b.remove();
+    try {
+      const p = await Notification.requestPermission();
+      if (p === "granted") saveToken();
+    } catch (e) {}
+  };
+  b.querySelector("#pnNo").onclick = () => {
+    try { localStorage.setItem("td_push_later", String(Date.now())); } catch (e) {}
+    b.remove();
+  };
+}
+
+const pushInit = (async () => {
+  try {
+    if (!("serviceWorker" in navigator) || !("Notification" in window)) return false;
+    if (!(await isSupported())) return false;
+    messaging = getMessaging(getApp());
+    onMessage(messaging, (payload) => {
+      const n = payload.notification || {};
+      toast(n.title || "TD ESP", n.body || "");
+    });
+    window.tdPush = {
+      status: () => Notification.permission,
+      enable: async () => {
+        const p = await Notification.requestPermission();
+        if (p === "granted") await saveToken();
+        return p;
+      }
+    };
+    return true;
+  } catch (e) { return false; }
+})();
+
+function pushAfterLogin() {
+  if (Notification.permission === "granted") { saveToken(); return; }
+  if (Notification.permission === "default") {
+    let later = 0;
+    try { later = Number(localStorage.getItem("td_push_later") || 0); } catch (e) {}
+    if (Date.now() - later > 3 * 24 * 3600 * 1000) setTimeout(banner, 6000);
+  }
+}
+
+/* ---------- Ban check ---------- */
+import * as FS from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import * as AU from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+
+let banBox = null;
+function showBan(reason) {
+  if (!banBox) {
+    banBox = document.createElement("div");
+    banBox.style.cssText = "position:fixed;inset:0;z-index:14;background:#fff;display:flex;" +
+      "flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:30px";
+    banBox.innerHTML =
+      "<svg viewBox='0 0 24 24' width='72' height='72' fill='none' stroke='#e53935' stroke-width='1.8' stroke-linecap='round'><circle cx='12' cy='12' r='9'/><path d='M5.6 5.6l12.8 12.8'/></svg>" +
+      "<h2 style='margin:14px 0 6px'>Account suspended</h2>" +
+      "<p style='color:#666;line-height:1.6;margin:0 0 6px'>Your account has been banned.</p>" +
+      "<p id='banWhy' style='color:#999;font-size:14px;margin:0 0 20px'></p>" +
+      "<button id='banHelp' style='width:100%;max-width:300px;padding:14px;border:none;border-radius:12px;background:#ff6a00;color:#fff;font-size:16px;font-weight:bold'>Contact Support</button>" +
+      "<button id='banOut' style='width:100%;max-width:300px;padding:14px;border:1px solid #ddd;border-radius:12px;background:#fff;color:#666;font-size:16px;margin-top:10px'>Logout</button>";
+    document.body.appendChild(banBox);
+    banBox.querySelector("#banHelp").onclick = () => openOverlay("support.html");
+    banBox.querySelector("#banOut").onclick = async () => { await AU.signOut(auth); };
+  }
+  banBox.querySelector("#banWhy").textContent = reason ? "Reason: " + reason : "";
+  banBox.style.display = "flex";
+}
+function hideBan() { if (banBox) banBox.style.display = "none"; }
+
+auth.onAuthStateChanged((user) => {
+  if (!user) return;
+  FS.onSnapshot(FS.doc(db, "users", user.uid), (s) => {
+    const d = s.data();
+    if (d && d.banned) showBan(d.banReason || ""); else hideBan();
+  }, () => {});
+});
+
+/* ---------- Login check ---------- */
 onAuthStateChanged(auth, (user) => {
   if (!user) { location.href = "index.html"; return; }
-  if (started) return;
-  started = true;
-  try { localStorage.setItem("td_uid", user.uid); } catch (e) {}
-  openTab("home");
-  setTimeout(() => { g("boot").style.display = "none"; }, 8000);
+  uid = user.uid;
+  if (!started) {
+    started = true;
+    try { localStorage.setItem("td_uid", user.uid); } catch (e) {}
+    openTab("home");
+    setTimeout(() => { g("boot").style.display = "none"; }, 8000);
+    pushInit.then((ok) => { if (ok) pushAfterLogin(); });
+  }
 });
 </script>
 
@@ -191,97 +335,6 @@ onAuthStateChanged(auth, (user) => {
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("sw.js").catch(function () {});
   }
-
-// ============ PUSH NOTIFICATIONS ============
-import { getApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getMessaging, getToken, onMessage, isSupported }
-  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging.js";
-import { getFirestore, doc, updateDoc }
-  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-
-const VAPID_KEY = "BPi6TBuf1WQRpCx09gS047Vc9Rz96aXWIPYQckxA4IwO5MtJ2hvxrak6biNF9ql2iWMc9Z2canxBfXFrq_jmClE
-‎"'';
-
-(async function () {
-  try {
-    if (!("serviceWorker" in navigator) || !("Notification" in window)) return;
-    if (!(await isSupported())) return;
-  } catch (e) { return; }
-
-  const db = getFirestore(getApp());
-  const messaging = getMessaging(getApp());
-  let uid = null;
-
-  async function saveToken() {
-    try {
-      const reg = await navigator.serviceWorker.register("sw.js");
-      await navigator.serviceWorker.ready;
-      const token = await getToken(messaging, { vapidKey: VAPID_KEY, serviceWorkerRegistration: reg });
-      if (token && uid) await updateDoc(doc(db, "users", uid), { fcmToken: token });
-    } catch (e) { console.log("push:", e); }
-  }
-
-  function toast(title, body) {
-    const t = document.createElement("div");
-    t.style.cssText = "position:fixed;left:12px;right:12px;top:12px;z-index:60;background:#222;color:#fff;" +
-      "border-radius:14px;padding:12px 14px;box-shadow:0 6px 20px rgba(0,0,0,.3);font-size:14px";
-    t.innerHTML = "<b style='display:block;margin-bottom:2px'></b><span></span>";
-    t.querySelector("b").textContent = title;
-    t.querySelector("span").textContent = body;
-    document.body.appendChild(t);
-    setTimeout(() => t.remove(), 5000);
-  }
-
-  function banner() {
-    const b = document.createElement("div");
-    b.style.cssText = "position:fixed;left:12px;right:12px;bottom:calc(80px + env(safe-area-inset-bottom));" +
-      "z-index:40;background:#222;color:#fff;border-radius:16px;padding:14px;" +
-      "box-shadow:0 8px 24px rgba(0,0,0,.35);font-size:14px;line-height:1.5";
-    b.innerHTML = "<b style='display:block;margin-bottom:4px;font-size:15px'>Turn on notifications</b>" +
-      "Get match, payment and offer alerts on your phone." +
-      "<div style='display:flex;gap:8px;margin-top:10px'>" +
-      "<button id='pnYes' style='flex:1;padding:11px;border:none;border-radius:10px;background:#ff6a00;color:#fff;font-size:15px;font-weight:bold'>Enable</button>" +
-      "<button id='pnNo' style='flex:1;padding:11px;border:1px solid #666;border-radius:10px;background:none;color:#ddd;font-size:15px'>Later</button></div>";
-    document.body.appendChild(b);
-    b.querySelector("#pnYes").onclick = async () => {
-      b.remove();
-      try {
-        const p = await Notification.requestPermission();
-        if (p === "granted") saveToken();
-      } catch (e) {}
-    };
-    b.querySelector("#pnNo").onclick = () => {
-      try { localStorage.setItem("td_push_later", String(Date.now())); } catch (e) {}
-      b.remove();
-    };
-  }
-
-  onMessage(messaging, (payload) => {
-    const n = payload.notification || {};
-    toast(n.title || "TD ESP", n.body || "");
-  });
-
-  window.tdPush = {
-    status: () => Notification.permission,
-    enable: async () => {
-      const p = await Notification.requestPermission();
-      if (p === "granted") await saveToken();
-      return p;
-    }
-  };
-
-  auth.onAuthStateChanged((user) => {
-    if (!user) return;
-    uid = user.uid;
-    if (Notification.permission === "granted") { saveToken(); return; }
-    if (Notification.permission === "default") {
-      let later = 0;
-      try { later = Number(localStorage.getItem("td_push_later") || 0); } catch (e) {}
-      if (Date.now() - later > 3 * 24 * 3600 * 1000) setTimeout(banner, 6000);
-    }
-  });
-})();
 </script>
-
 </body>
 </html>
